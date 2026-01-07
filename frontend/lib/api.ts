@@ -10,8 +10,34 @@ export interface Agent {
   last_seen?: string;
   group_id?: number;
   group?: Group;
+  routes?: string;
+  services?: Service[];
   created_at: string;
   updated_at: string;
+}
+
+export interface Service {
+  id: number;
+  agent_id: number;
+  name: string;
+  description: string;
+  port: number;
+  protocol: string;
+  local_addr?: string;
+  enabled: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface AuditLog {
+  id: number;
+  agent_id?: number;
+  agent?: Agent;
+  action: string;
+  details: string;
+  ip_address?: string;
+  user_agent?: string;
+  created_at: string;
 }
 
 export interface Group {
@@ -45,6 +71,12 @@ export async function getAgents(): Promise<Agent[]> {
   return res.json();
 }
 
+export async function getAgent(id: number): Promise<Agent> {
+  const res = await fetch(`${API_BASE}/api/v1/agents/${id}`);
+  if (!res.ok) throw new Error('Failed to fetch agent');
+  return res.json();
+}
+
 export async function createAgent(data: { name: string; group_id?: number }): Promise<Agent> {
   const res = await fetch(`${API_BASE}/api/v1/agents`, {
     method: 'POST',
@@ -58,6 +90,62 @@ export async function createAgent(data: { name: string; group_id?: number }): Pr
 export async function deleteAgent(id: number): Promise<void> {
   const res = await fetch(`${API_BASE}/api/v1/agents/${id}`, { method: 'DELETE' });
   if (!res.ok) throw new Error('Failed to delete agent');
+}
+
+export async function regenerateAgentKey(id: number): Promise<{ api_key: string }> {
+  const res = await fetch(`${API_BASE}/api/v1/agents/${id}/regenerate-key`, { method: 'POST' });
+  if (!res.ok) throw new Error('Failed to regenerate key');
+  return res.json();
+}
+
+export async function updateAgentRoutes(id: number, routes: string[]): Promise<Agent> {
+  const res = await fetch(`${API_BASE}/api/v1/agents/${id}/routes`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ routes }),
+  });
+  if (!res.ok) throw new Error('Failed to update routes');
+  return res.json();
+}
+
+// Services API
+export async function getAgentServices(agentId: number): Promise<Service[]> {
+  const res = await fetch(`${API_BASE}/api/v1/agents/${agentId}/services`);
+  if (!res.ok) throw new Error('Failed to fetch services');
+  return res.json();
+}
+
+export async function createService(agentId: number, data: Partial<Service>): Promise<Service> {
+  const res = await fetch(`${API_BASE}/api/v1/agents/${agentId}/services`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(data),
+  });
+  if (!res.ok) throw new Error('Failed to create service');
+  return res.json();
+}
+
+export async function deleteService(agentId: number, serviceId: number): Promise<void> {
+  const res = await fetch(`${API_BASE}/api/v1/agents/${agentId}/services/${serviceId}`, { method: 'DELETE' });
+  if (!res.ok) throw new Error('Failed to delete service');
+}
+
+// Audit Logs API
+export async function getAuditLogs(params?: { agent_id?: number; action?: string; limit?: number }): Promise<AuditLog[]> {
+  const query = new URLSearchParams();
+  if (params?.agent_id) query.set('agent_id', String(params.agent_id));
+  if (params?.action) query.set('action', params.action);
+  if (params?.limit) query.set('limit', String(params.limit));
+
+  const res = await fetch(`${API_BASE}/api/v1/audit-logs?${query.toString()}`);
+  if (!res.ok) throw new Error('Failed to fetch audit logs');
+  return res.json();
+}
+
+export async function getAgentAuditLogs(agentId: number, limit = 50): Promise<AuditLog[]> {
+  const res = await fetch(`${API_BASE}/api/v1/agents/${agentId}/audit-logs?limit=${limit}`);
+  if (!res.ok) throw new Error('Failed to fetch agent audit logs');
+  return res.json();
 }
 
 // Groups API

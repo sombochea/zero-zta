@@ -20,6 +20,38 @@ type Agent struct {
 	LastSeen  *time.Time `json:"last_seen,omitempty"`
 	GroupID   *uint      `json:"group_id,omitempty"`
 	Group     *Group     `gorm:"foreignKey:GroupID" json:"group,omitempty"`
+
+	// Enhanced fields
+	Routes   string    `gorm:"size:1024" json:"routes,omitempty"` // JSON array of local subnets e.g., ["192.168.1.0/24"]
+	Services []Service `gorm:"foreignKey:AgentID" json:"services,omitempty"`
+}
+
+type Service struct {
+	ID        uint           `gorm:"primarykey" json:"id"`
+	CreatedAt time.Time      `json:"created_at"`
+	UpdatedAt time.Time      `json:"updated_at"`
+	DeletedAt gorm.DeletedAt `gorm:"index" json:"-"`
+
+	AgentID     uint   `gorm:"index" json:"agent_id"`
+	Agent       *Agent `gorm:"foreignKey:AgentID" json:"-"`
+	Name        string `gorm:"size:255" json:"name"` // e.g., "MySQL", "Redis"
+	Description string `gorm:"size:512" json:"description"`
+	Port        int    `json:"port"`                                  // e.g., 3306
+	Protocol    string `gorm:"size:16;default:'tcp'" json:"protocol"` // tcp, udp
+	LocalAddr   string `gorm:"size:128" json:"local_addr,omitempty"`  // optional: 127.0.0.1:3306
+	Enabled     bool   `gorm:"default:true" json:"enabled"`
+}
+
+type AuditLog struct {
+	ID        uint      `gorm:"primarykey" json:"id"`
+	CreatedAt time.Time `json:"created_at"`
+
+	AgentID   *uint  `gorm:"index" json:"agent_id,omitempty"`
+	Agent     *Agent `gorm:"foreignKey:AgentID" json:"agent,omitempty"`
+	Action    string `gorm:"size:64;index" json:"action"` // connected, disconnected, key_rotated, service_added, etc.
+	Details   string `gorm:"type:text" json:"details"`    // JSON metadata
+	IPAddress string `gorm:"size:64" json:"ip_address,omitempty"`
+	UserAgent string `gorm:"size:256" json:"user_agent,omitempty"`
 }
 
 type Group struct {

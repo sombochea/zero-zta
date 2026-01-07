@@ -31,7 +31,7 @@ func main() {
 	}
 
 	// Auto migrate models
-	if err := db.AutoMigrate(&models.Agent{}, &models.Group{}, &models.Policy{}); err != nil {
+	if err := db.AutoMigrate(&models.Agent{}, &models.Group{}, &models.Policy{}, &models.Service{}, &models.AuditLog{}); err != nil {
 		log.Fatalf("Failed to migrate database: %v", err)
 	}
 
@@ -81,6 +81,25 @@ func main() {
 	v1.Get("/policies/:id", handlers.GetPolicy)
 	v1.Put("/policies/:id", handlers.UpdatePolicy)
 	v1.Delete("/policies/:id", handlers.DeletePolicy)
+
+	// =====================
+	// Service Routes
+	// =====================
+	v1.Get("/agents/:id/services", handlers.ListServices)
+	v1.Post("/agents/:id/services", handlers.CreateService)
+	v1.Delete("/agents/:id/services/:serviceId", handlers.DeleteService)
+
+	// =====================
+	// Agent Management Routes
+	// =====================
+	v1.Post("/agents/:id/regenerate-key", handlers.RegenerateAgentKey)
+	v1.Put("/agents/:id/routes", handlers.UpdateAgentRoutes)
+	v1.Get("/agents/:id/audit-logs", handlers.GetAgentAuditLogs)
+
+	// =====================
+	// Audit Log Routes
+	// =====================
+	v1.Get("/audit-logs", handlers.ListAuditLogs)
 
 	// Agent Connect (for Wireguard handshake)
 	v1.Post("/agent/connect", func(c fiber.Ctx) error {
