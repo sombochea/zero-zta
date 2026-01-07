@@ -31,7 +31,7 @@ func main() {
 	}
 
 	// Auto migrate models
-	if err := db.AutoMigrate(&models.Agent{}, &models.Group{}, &models.Policy{}, &models.Service{}, &models.AuditLog{}); err != nil {
+	if err := db.AutoMigrate(&models.Agent{}, &models.Group{}, &models.Policy{}, &models.Service{}, &models.AuditLog{}, &models.AccessLog{}, &models.AgentMetrics{}); err != nil {
 		log.Fatalf("Failed to migrate database: %v", err)
 	}
 
@@ -61,8 +61,12 @@ func main() {
 	v1.Get("/agents", handlers.ListAgents)
 	v1.Post("/agents", handlers.CreateAgent)
 	v1.Get("/agents/:id", handlers.GetAgent)
+	v1.Put("/agents/:id", handlers.UpdateAgent)
 	v1.Delete("/agents/:id", handlers.DeleteAgent)
 	v1.Post("/agents/heartbeat", handlers.UpdateAgentStatus)
+	v1.Put("/agents/:id/group", handlers.AssignGroup)
+	v1.Get("/agents/:id/metrics", handlers.GetAgentMetrics)
+	v1.Get("/agents/:id/access-logs", handlers.GetAccessLogs)
 
 	// =====================
 	// Group CRUD Routes
@@ -97,9 +101,17 @@ func main() {
 	v1.Get("/agents/:id/audit-logs", handlers.GetAgentAuditLogs)
 
 	// =====================
-	// Audit Log Routes
+	// Audit & Access Log Routes
 	// =====================
 	v1.Get("/audit-logs", handlers.ListAuditLogs)
+	v1.Get("/access-logs", handlers.GetAllAccessLogs)
+
+	// =====================
+	// Debug Tools
+	// =====================
+	v1.Post("/debug/ping", handlers.PingAgent)
+	v1.Post("/debug/port-check", handlers.CheckPort)
+	v1.Post("/debug/traceroute", handlers.Traceroute)
 
 	// Agent Connect (for Wireguard handshake)
 	v1.Post("/agent/connect", func(c fiber.Ctx) error {

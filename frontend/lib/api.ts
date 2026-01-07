@@ -3,6 +3,7 @@ const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://127.0.0.1:3000';
 export interface Agent {
   id: number;
   name: string;
+  description?: string;
   api_key?: string;
   public_key?: string;
   ip: string;
@@ -40,6 +41,36 @@ export interface AuditLog {
   created_at: string;
 }
 
+export interface AccessLog {
+  id: number;
+  source_agent_id: number;
+  source_agent?: Agent;
+  dest_agent_id: number;
+  dest_agent?: Agent;
+  service_id?: number;
+  service?: Service;
+  action: string;
+  port: number;
+  protocol: string;
+  bytes_sent: number;
+  bytes_received: number;
+  duration_ms: number;
+  created_at: string;
+}
+
+export interface AgentMetrics {
+  id: number;
+  agent_id: number;
+  heartbeat_latency_ms: number;
+  bytes_sent: number;
+  bytes_received: number;
+  active_connections: number;
+  failed_connections: number;
+  cpu_usage?: number;
+  memory_usage?: number;
+  created_at: string;
+}
+
 export interface Group {
   id: number;
   name: string;
@@ -64,6 +95,27 @@ export interface Policy {
   updated_at: string;
 }
 
+// Ping result
+export interface PingResult {
+  source: string;
+  destination: string;
+  packets_sent: number;
+  packets_recv: number;
+  packet_loss: number;
+  avg_latency: number;
+  results: { seq: number; success: boolean; latency: number }[];
+}
+
+export interface PortCheckResult {
+  source: string;
+  destination: string;
+  port: number;
+  protocol: string;
+  status: string;
+  latency_ms: number;
+  service?: string;
+}
+
 // Agents API
 export async function getAgents(): Promise<Agent[]> {
   const res = await fetch(`${API_BASE}/api/v1/agents`);
@@ -77,13 +129,33 @@ export async function getAgent(id: number): Promise<Agent> {
   return res.json();
 }
 
-export async function createAgent(data: { name: string; group_id?: number }): Promise<Agent> {
+export async function createAgent(data: { name: string; description?: string; group_id?: number }): Promise<Agent> {
   const res = await fetch(`${API_BASE}/api/v1/agents`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(data),
   });
   if (!res.ok) throw new Error('Failed to create agent');
+  return res.json();
+}
+
+export async function updateAgent(id: number, data: { name?: string; description?: string; group_id?: number }): Promise<Agent> {
+  const res = await fetch(`${API_BASE}/api/v1/agents/${id}`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(data),
+  });
+  if (!res.ok) throw new Error('Failed to update agent');
+  return res.json();
+}
+
+export async function assignAgentGroup(id: number, groupId: number | null): Promise<Agent> {
+  const res = await fetch(`${API_BASE}/api/v1/agents/${id}/group`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ group_id: groupId }),
+  });
+  if (!res.ok) throw new Error('Failed to assign group');
   return res.json();
 }
 
@@ -105,6 +177,19 @@ export async function updateAgentRoutes(id: number, routes: string[]): Promise<A
     body: JSON.stringify({ routes }),
   });
   if (!res.ok) throw new Error('Failed to update routes');
+  return res.json();
+}
+
+// Metrics API
+export async function getAgentMetrics(agentId: number, limit = 100): Promise<AgentMetrics[]> {
+  const res = await fetch(`${API_BASE}/api/v1/agents/${agentId}/metrics?limit=${limit}`);
+  if (!res.ok) throw new Error('Failed to fetch metrics');
+  return res.json();
+}
+
+export async function getAgentAccessLogs(agentId: number, limit = 100): Promise<AccessLog[]> {
+  const res = await fetch(`${API_BASE}/api/v1/agents/${agentId}/access-logs?limit=${limit}`);
+  if (!res.ok) throw new Error('Failed to fetch access logs');
   return res.json();
 }
 
@@ -145,6 +230,37 @@ export async function getAuditLogs(params?: { agent_id?: number; action?: string
 export async function getAgentAuditLogs(agentId: number, limit = 50): Promise<AuditLog[]> {
   const res = await fetch(`${API_BASE}/api/v1/agents/${agentId}/audit-logs?limit=${limit}`);
   if (!res.ok) throw new Error('Failed to fetch agent audit logs');
+  return res.json();
+}
+
+// Debug Tools API
+export async function pingAgent(sourceId: number, destId: number, count = 4): Promise<PingResult> {
+  const res = await fetch(`${API_BASE}/api/v1/debug/ping`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ source_agent_id: sourceId, dest_agent_id: destId, count }),
+  });
+  if (!res.ok) throw new Error('Failed to ping');
+  return res.json();
+}
+
+export async function checkPort(sourceId: number, destId: number, port: number, protocol = 'tcp'): Promise<PortCheckResult> {
+  const res = await fetch(`${API_BASE}/api/v1/debug/port-check`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ source_agent_id: sourceId, dest_agent_id: destId, port, protocol }),
+  });
+  if (!res.ok) throw new Error('Failed to check port');
+  return res.json();
+}
+
+export async function traceroute(sourceId: number, destId: number): Promise<any> {
+  const res = await fetch(`${API_BASE}/api/v1/debug/traceroute`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ source_agent_id: sourceId, dest_agent_id: destId }),
+  });
+  if (!res.ok) throw new Error('Failed to traceroute');
   return res.json();
 }
 

@@ -13,7 +13,8 @@ import {
     Network,
     Menu,
     X,
-    FileText
+    FileText,
+    Bug
 } from "lucide-react";
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
@@ -25,6 +26,7 @@ const navItems = [
     { href: "/groups", label: "Groups", icon: FolderTree },
     { href: "/policies", label: "Policies", icon: Shield },
     { href: "/audit-logs", label: "Audit Logs", icon: FileText },
+    { href: "/debug", label: "Debug Tools", icon: Bug },
 ];
 
 function NavLink({ item, isActive, onClick }: {

@@ -12,17 +12,18 @@ type Agent struct {
 	UpdatedAt time.Time      `json:"updated_at"`
 	DeletedAt gorm.DeletedAt `gorm:"index" json:"-"`
 
-	Name      string     `gorm:"size:255" json:"name"`
-	APIKey    string     `gorm:"uniqueIndex;size:64" json:"api_key,omitempty"`
-	PublicKey string     `gorm:"size:64" json:"public_key,omitempty"`
-	IP        string     `gorm:"size:32" json:"ip"`
-	Status    string     `gorm:"size:32;default:'offline'" json:"status"` // online, offline
-	LastSeen  *time.Time `json:"last_seen,omitempty"`
-	GroupID   *uint      `json:"group_id,omitempty"`
-	Group     *Group     `gorm:"foreignKey:GroupID" json:"group,omitempty"`
+	Name        string     `gorm:"size:255" json:"name"`
+	Description string     `gorm:"size:1024" json:"description,omitempty"`
+	APIKey      string     `gorm:"uniqueIndex;size:64" json:"api_key,omitempty"`
+	PublicKey   string     `gorm:"size:64" json:"public_key,omitempty"`
+	IP          string     `gorm:"size:32" json:"ip"`
+	Status      string     `gorm:"size:32;default:'offline'" json:"status"` // online, offline
+	LastSeen    *time.Time `json:"last_seen,omitempty"`
+	GroupID     *uint      `json:"group_id,omitempty"`
+	Group       *Group     `gorm:"foreignKey:GroupID" json:"group,omitempty"`
 
 	// Enhanced fields
-	Routes   string    `gorm:"size:1024" json:"routes,omitempty"` // JSON array of local subnets e.g., ["192.168.1.0/24"]
+	Routes   string    `gorm:"size:1024" json:"routes,omitempty"` // JSON array of local subnets
 	Services []Service `gorm:"foreignKey:AgentID" json:"services,omitempty"`
 }
 
@@ -34,11 +35,11 @@ type Service struct {
 
 	AgentID     uint   `gorm:"index" json:"agent_id"`
 	Agent       *Agent `gorm:"foreignKey:AgentID" json:"-"`
-	Name        string `gorm:"size:255" json:"name"` // e.g., "MySQL", "Redis"
+	Name        string `gorm:"size:255" json:"name"`
 	Description string `gorm:"size:512" json:"description"`
-	Port        int    `json:"port"`                                  // e.g., 3306
-	Protocol    string `gorm:"size:16;default:'tcp'" json:"protocol"` // tcp, udp
-	LocalAddr   string `gorm:"size:128" json:"local_addr,omitempty"`  // optional: 127.0.0.1:3306
+	Port        int    `json:"port"`
+	Protocol    string `gorm:"size:16;default:'tcp'" json:"protocol"`
+	LocalAddr   string `gorm:"size:128" json:"local_addr,omitempty"`
 	Enabled     bool   `gorm:"default:true" json:"enabled"`
 }
 
@@ -48,10 +49,45 @@ type AuditLog struct {
 
 	AgentID   *uint  `gorm:"index" json:"agent_id,omitempty"`
 	Agent     *Agent `gorm:"foreignKey:AgentID" json:"agent,omitempty"`
-	Action    string `gorm:"size:64;index" json:"action"` // connected, disconnected, key_rotated, service_added, etc.
-	Details   string `gorm:"type:text" json:"details"`    // JSON metadata
+	Action    string `gorm:"size:64;index" json:"action"`
+	Details   string `gorm:"type:text" json:"details"`
 	IPAddress string `gorm:"size:64" json:"ip_address,omitempty"`
 	UserAgent string `gorm:"size:256" json:"user_agent,omitempty"`
+}
+
+// AccessLog tracks inter-agent connections
+type AccessLog struct {
+	ID        uint      `gorm:"primarykey" json:"id"`
+	CreatedAt time.Time `json:"created_at"`
+
+	SourceAgentID uint     `gorm:"index" json:"source_agent_id"`
+	SourceAgent   *Agent   `gorm:"foreignKey:SourceAgentID" json:"source_agent,omitempty"`
+	DestAgentID   uint     `gorm:"index" json:"dest_agent_id"`
+	DestAgent     *Agent   `gorm:"foreignKey:DestAgentID" json:"dest_agent,omitempty"`
+	ServiceID     *uint    `json:"service_id,omitempty"`
+	Service       *Service `gorm:"foreignKey:ServiceID" json:"service,omitempty"`
+	Action        string   `gorm:"size:32" json:"action"` // allowed, denied
+	Port          int      `json:"port"`
+	Protocol      string   `gorm:"size:16" json:"protocol"`
+	BytesSent     int64    `json:"bytes_sent"`
+	BytesReceived int64    `json:"bytes_received"`
+	Duration      int64    `json:"duration_ms"` // milliseconds
+}
+
+// AgentMetrics stores health and traffic metrics
+type AgentMetrics struct {
+	ID        uint      `gorm:"primarykey" json:"id"`
+	CreatedAt time.Time `json:"created_at"`
+
+	AgentID           uint    `gorm:"index" json:"agent_id"`
+	Agent             *Agent  `gorm:"foreignKey:AgentID" json:"-"`
+	HeartbeatLatency  int     `json:"heartbeat_latency_ms"` // ms
+	BytesSent         int64   `json:"bytes_sent"`
+	BytesReceived     int64   `json:"bytes_received"`
+	ActiveConnections int     `json:"active_connections"`
+	FailedConnections int     `json:"failed_connections"`
+	CPUUsage          float64 `json:"cpu_usage,omitempty"`
+	MemoryUsage       float64 `json:"memory_usage,omitempty"`
 }
 
 type Group struct {
@@ -77,7 +113,7 @@ type Policy struct {
 	SourceGroup   Group  `gorm:"foreignKey:SourceGroupID" json:"source_group,omitempty"`
 	DestGroupID   uint   `json:"dest_group_id"`
 	DestGroup     Group  `gorm:"foreignKey:DestGroupID" json:"dest_group,omitempty"`
-	AllowedPorts  string `gorm:"size:512" json:"allowed_ports"`         // e.g., "80,443,22" or "*"
-	Action        string `gorm:"size:32;default:'allow'" json:"action"` // allow, deny
+	AllowedPorts  string `gorm:"size:512" json:"allowed_ports"`
+	Action        string `gorm:"size:32;default:'allow'" json:"action"`
 	Enabled       bool   `gorm:"default:true" json:"enabled"`
 }
