@@ -9,7 +9,7 @@ import (
 // ListGroups returns all groups
 func ListGroups(c fiber.Ctx) error {
 	var groups []models.Group
-	if err := db.DB.Find(&groups).Error; err != nil {
+	if err := db.DB.Preload("Agents").Find(&groups).Error; err != nil {
 		return c.Status(500).JSON(fiber.Map{"error": err.Error()})
 	}
 	return c.JSON(groups)

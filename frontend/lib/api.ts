@@ -264,6 +264,26 @@ export async function traceroute(sourceId: number, destId: number): Promise<any>
   return res.json();
 }
 
+export async function dnsLookup(sourceId: number, domain: string, recordType = "A"): Promise<any> {
+  const res = await fetch(`${API_BASE}/api/v1/debug/dns`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ source_agent_id: sourceId, domain, record_type: recordType }),
+  });
+  if (!res.ok) throw new Error('Failed to lookup DNS');
+  return res.json();
+}
+
+export async function httpCheck(sourceId: number, url: string, method = "GET"): Promise<any> {
+  const res = await fetch(`${API_BASE}/api/v1/debug/http`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ source_agent_id: sourceId, url, method }),
+  });
+  if (!res.ok) throw new Error('Failed to check HTTP');
+  return res.json();
+}
+
 // Groups API
 export async function getGroups(): Promise<Group[]> {
   const res = await fetch(`${API_BASE}/api/v1/groups`);
@@ -278,6 +298,16 @@ export async function createGroup(data: { name: string; description?: string }):
     body: JSON.stringify(data),
   });
   if (!res.ok) throw new Error('Failed to create group');
+  return res.json();
+}
+
+export async function updateGroup(id: number, data: { name?: string; description?: string }): Promise<Group> {
+  const res = await fetch(`${API_BASE}/api/v1/groups/${id}`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(data),
+  });
+  if (!res.ok) throw new Error('Failed to update group');
   return res.json();
 }
 

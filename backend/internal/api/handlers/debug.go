@@ -206,6 +206,79 @@ func GetAllAccessLogs(c fiber.Ctx) error {
 	return c.JSON(logs)
 }
 
+// DNSLookup performs a DNS lookup
+func DNSLookup(c fiber.Ctx) error {
+	type DNSRequest struct {
+		SourceAgentID uint   `json:"source_agent_id"`
+		Domain        string `json:"domain"`
+		RecordType    string `json:"record_type"` // A, AAAA, MX, TXT, etc.
+	}
+
+	var req DNSRequest
+	if err := c.Bind().Body(&req); err != nil {
+		return c.Status(400).JSON(fiber.Map{"error": "Invalid request"})
+	}
+
+	if req.RecordType == "" {
+		req.RecordType = "A"
+	}
+
+	// Simulated DNS resolution
+	// In real world, this would execute `dig` or similar on the agent via VPN control channel
+	records := []string{}
+	if req.Domain == "localhost" {
+		records = []string{"127.0.0.1"}
+	} else if req.Domain == "internal.service" {
+		records = []string{"10.0.0.5", "10.0.0.6"}
+	} else {
+		// Random simulated IP
+		records = []string{fmt.Sprintf("10.0.0.%d", time.Now().UnixNano()%250+2)}
+	}
+
+	return c.JSON(fiber.Map{
+		"domain":      req.Domain,
+		"record_type": req.RecordType,
+		"records":     records,
+		"server":      "10.0.0.1 (VPN DNS)",
+		"latency_ms":  15,
+	})
+}
+
+// HTTPCheck performs an HTTP request check
+func HTTPCheck(c fiber.Ctx) error {
+	type HTTPRequest struct {
+		SourceAgentID uint   `json:"source_agent_id"`
+		URL           string `json:"url"`
+		Method        string `json:"method"`
+	}
+
+	var req HTTPRequest
+	if err := c.Bind().Body(&req); err != nil {
+		return c.Status(400).JSON(fiber.Map{"error": "Invalid request"})
+	}
+
+	if req.Method == "" {
+		req.Method = "GET"
+	}
+
+	// Simulated HTTP check
+	statusCode := 200
+	statusText := "OK"
+	duration := 45 // ms
+
+	return c.JSON(fiber.Map{
+		"url":         req.URL,
+		"method":      req.Method,
+		"status_code": statusCode,
+		"status_text": statusText,
+		"duration_ms": duration,
+		"headers": map[string]string{
+			"Content-Type": "application/json",
+			"Server":       "ZeroZTA-Agent/1.0",
+		},
+	})
+}
+
 // Helper to check TCP port (for real implementation)
 func checkTCPPort(host string, port int, timeout time.Duration) bool {
 	addr := fmt.Sprintf("%s:%d", host, port)

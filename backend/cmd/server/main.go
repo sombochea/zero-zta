@@ -112,6 +112,8 @@ func main() {
 	v1.Post("/debug/ping", handlers.PingAgent)
 	v1.Post("/debug/port-check", handlers.CheckPort)
 	v1.Post("/debug/traceroute", handlers.Traceroute)
+	v1.Post("/debug/dns", handlers.DNSLookup)
+	v1.Post("/debug/http", handlers.HTTPCheck)
 
 	// Agent Connect (for Wireguard handshake)
 	v1.Post("/agent/connect", func(c fiber.Ctx) error {
