@@ -1,3 +1,4 @@
 bin/
 wg0.sock
 server.log
+*.db

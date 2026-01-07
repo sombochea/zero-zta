@@ -6,8 +6,13 @@ import (
 	"fmt"
 	"log"
 	"net/netip"
+	"time"
 
+	"github.com/cubetiq/zero-zta/backend/internal/api/handlers"
+	"github.com/cubetiq/zero-zta/backend/internal/db"
+	"github.com/cubetiq/zero-zta/backend/internal/models"
 	"github.com/gofiber/fiber/v3"
+	"github.com/gofiber/fiber/v3/middleware/cors"
 	"golang.zx2c4.com/wireguard/conn"
 	"golang.zx2c4.com/wireguard/device"
 	"golang.zx2c4.com/wireguard/tun/netstack"
@@ -16,54 +21,68 @@ import (
 // Hardcoded keys for demonstration
 const (
 	ServerPrivateKey = "OIfjl8wL+duLGyDoV8jS+/EFmzGWpa0tKBo+ThwKE2E="
-	// ServerPublicKey = "8Jxz+AhkWA1ul56CSK5E2UtBMsBuLFARuTAiovNTOg4="
-
-	// AgentPublicKey = "+UO34739AnKDZbBu/aCQX0l5zCbHzy21Apy/AF9lXiw=" // Removed hardcoded agent key
-)
-
-// Simple in-memory store
-type AgentData struct {
-	IP        string
-	PublicKey string
-}
-
-var (
-	// Map API Key -> Agent Data (if registered)
-	// validKeys just stores valid API keys.
-	validKeys = map[string]*AgentData{}
-
-	// Next IP allocator (very simple)
-	nextIP = 2
+	ServerPublicKey  = "8Jxz+AhkWA1ul56CSK5E2UtBMsBuLFARuTAiovNTOg4="
 )
 
 func main() {
+	// Initialize Database
+	if err := db.Init("zero-zta.db"); err != nil {
+		log.Fatalf("Failed to initialize database: %v", err)
+	}
+
+	// Auto migrate models
+	if err := db.AutoMigrate(&models.Agent{}, &models.Group{}, &models.Policy{}); err != nil {
+		log.Fatalf("Failed to migrate database: %v", err)
+	}
+
 	// Initialize Fiber app
-	app := fiber.New()
+	app := fiber.New(fiber.Config{
+		AppName: "Zero ZTA Server",
+	})
+
+	// CORS middleware
+	app.Use(cors.New())
 
 	// Health Check
 	app.Get("/health", func(c fiber.Ctx) error {
 		return c.SendString("OK")
 	})
 
-	// API Group for Agents
+	// API Group
 	api := app.Group("/api")
 	v1 := api.Group("/v1")
 
 	// Start Wireguard Server
 	go startWireguardServer()
 
-	// Create Credential Endpoint
-	v1.Post("/credentials", func(c fiber.Ctx) error {
-		// Generate simple key
-		key := fmt.Sprintf("sk_live_%x", nextIP) // simple unique key generation
-		validKeys[key] = nil                     // authorize key, no agent data yet
+	// =====================
+	// Agent CRUD Routes
+	// =====================
+	v1.Get("/agents", handlers.ListAgents)
+	v1.Post("/agents", handlers.CreateAgent)
+	v1.Get("/agents/:id", handlers.GetAgent)
+	v1.Delete("/agents/:id", handlers.DeleteAgent)
+	v1.Post("/agents/heartbeat", handlers.UpdateAgentStatus)
 
-		return c.JSON(fiber.Map{
-			"key": key,
-		})
-	})
+	// =====================
+	// Group CRUD Routes
+	// =====================
+	v1.Get("/groups", handlers.ListGroups)
+	v1.Post("/groups", handlers.CreateGroup)
+	v1.Get("/groups/:id", handlers.GetGroup)
+	v1.Put("/groups/:id", handlers.UpdateGroup)
+	v1.Delete("/groups/:id", handlers.DeleteGroup)
 
-	// Handle agent connection, auth, and config distribution
+	// =====================
+	// Policy CRUD Routes
+	// =====================
+	v1.Get("/policies", handlers.ListPolicies)
+	v1.Post("/policies", handlers.CreatePolicy)
+	v1.Get("/policies/:id", handlers.GetPolicy)
+	v1.Put("/policies/:id", handlers.UpdatePolicy)
+	v1.Delete("/policies/:id", handlers.DeletePolicy)
+
+	// Agent Connect (for Wireguard handshake)
 	v1.Post("/agent/connect", func(c fiber.Ctx) error {
 		type ConnectRequest struct {
 			Key       string `json:"key"`
@@ -75,48 +94,33 @@ func main() {
 			return c.Status(400).JSON(fiber.Map{"error": "invalid request"})
 		}
 
-		// Authenticate
-		data, ok := validKeys[req.Key]
-		if !ok {
+		// Find agent by API key
+		var agent models.Agent
+		if err := db.DB.Where("api_key = ?", req.Key).First(&agent).Error; err != nil {
 			return c.Status(401).JSON(fiber.Map{"error": "invalid key"})
 		}
 
-		// Register if first time
-		if data == nil {
-			ip := fmt.Sprintf("10.0.0.%d", nextIP)
-			nextIP++
-
-			data = &AgentData{
-				IP:        ip,
-				PublicKey: req.PublicKey,
+		// Update agent with public key
+		now := time.Now()
+		if agent.PublicKey != req.PublicKey {
+			if agent.PublicKey != "" {
+				// Key rotation - remove old peer
+				removePeerFromWireguard(agent.PublicKey)
 			}
-			validKeys[req.Key] = data
-
-			// Add peer to Wireguard
-			addPeerToWireguard(req.PublicKey, ip)
-		} else {
-			// If already registered
-			if data.PublicKey != req.PublicKey {
-				// Handle Key Rotation:
-				// 1. Remove old peer from Wireguard
-				removePeerFromWireguard(data.PublicKey)
-
-				// 2. Update data
-				log.Printf("Key rotation for agent %s: %s -> %s", req.Key, data.PublicKey, req.PublicKey)
-				data.PublicKey = req.PublicKey
-
-				// 3. Add new peer
-				addPeerToWireguard(req.PublicKey, data.IP)
-			}
+			agent.PublicKey = req.PublicKey
+			addPeerToWireguard(req.PublicKey, agent.IP)
 		}
+		agent.Status = "online"
+		agent.LastSeen = &now
+		db.DB.Save(&agent)
 
 		return c.JSON(fiber.Map{
 			"status": "connected",
 			"vpn": fiber.Map{
-				"endpoint":       "127.0.0.1:51820",                              // In real world this would be public IP
-				"server_pub_key": "8Jxz+AhkWA1ul56CSK5E2UtBMsBuLFARuTAiovNTOg4=", // derived from server priv key
+				"endpoint":       "127.0.0.1:51820",
+				"server_pub_key": ServerPublicKey,
 				"allowed_ips":    "10.0.0.0/24",
-				"assigned_ip":    data.IP + "/32",
+				"assigned_ip":    agent.IP + "/32",
 			},
 		})
 	})
