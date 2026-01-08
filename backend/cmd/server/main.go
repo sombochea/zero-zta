@@ -11,6 +11,7 @@ import (
 	"github.com/cubetiq/zero-zta/backend/internal/api/handlers"
 	"github.com/cubetiq/zero-zta/backend/internal/db"
 	"github.com/cubetiq/zero-zta/backend/internal/models"
+	"github.com/cubetiq/zero-zta/backend/internal/service"
 	"github.com/gofiber/fiber/v3"
 	"github.com/gofiber/fiber/v3/middleware/cors"
 	"golang.zx2c4.com/wireguard/conn"
@@ -159,42 +160,14 @@ func main() {
 	})
 
 	// Debug Proxy Endpoint
-	// Usage: curl "http://127.0.0.1:3000/api/v1/debug/proxy?target=10.0.0.x"
-	v1.Get("/debug/proxy", func(c fiber.Ctx) error {
-		target := c.Query("target")
-		if target == "" {
-			return c.Status(400).JSON(fiber.Map{"error": "target query param required"})
-		}
-
-		if serverTNet == nil {
-			return c.Status(503).JSON(fiber.Map{"error": "VPN not initialized"})
-		}
-
-		// Dial the target on port 80 inside the VPN
-		conn, err := serverTNet.Dial("tcp", target+":80")
-		if err != nil {
-			return c.Status(502).JSON(fiber.Map{"error": fmt.Sprintf("Failed to dial %s: %v", target, err)})
-		}
-		defer conn.Close()
-
-		// Send simple HTTP GET
-		fmt.Fprintf(conn, "GET / HTTP/1.0\r\n\r\n")
-
-		// Read response
-		buf := make([]byte, 1024)
-		n, err := conn.Read(buf)
-		if err != nil {
-			return c.Status(502).JSON(fiber.Map{"error": fmt.Sprintf("Failed to read from %s: %v", target, err)})
-		}
-
-		return c.SendString(string(buf[:n]))
-	})
+	v1.Get("/debug/proxy", handlers.ProxyToAgent)
 
 	log.Fatal(app.Listen(":3000"))
 }
 
 var serverDev *device.Device
-var serverTNet *netstack.Net // Global netstack instance
+
+// var serverTNet *netstack.Net // Moved to service.VPNNet
 
 func startWireguardServer() {
 	var err error
@@ -209,7 +182,7 @@ func startWireguardServer() {
 	if err != nil {
 		log.Panicf("Failed to create server TUN: %v", err)
 	}
-	serverTNet = tnet
+	service.SetVPNNet(tnet)
 
 	// Config string (normally generated via ipc/UAPI or wgtypes, but for netstack/device we can use UAPI string format)
 	// Format:

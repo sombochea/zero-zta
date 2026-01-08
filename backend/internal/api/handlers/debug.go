@@ -1,21 +1,25 @@
 package handlers
 
 import (
+	"context"
 	"fmt"
+	"io"
 	"net"
+	"net/http"
 	"time"
 
 	"github.com/cubetiq/zero-zta/backend/internal/db"
 	"github.com/cubetiq/zero-zta/backend/internal/models"
+	"github.com/cubetiq/zero-zta/backend/internal/service"
 	"github.com/gofiber/fiber/v3"
 )
 
-// PingAgent performs a ping test between agents
+// PingAgent performs a ping test (Server -> Agent)
+// Since we don't have C2 to trigger Agent -> Agent ping yet, we verify connectivity from Server
 func PingAgent(c fiber.Ctx) error {
 	type PingRequest struct {
-		SourceAgentID uint `json:"source_agent_id"`
-		DestAgentID   uint `json:"dest_agent_id"`
-		Count         int  `json:"count"`
+		DestAgentID uint `json:"dest_agent_id"`
+		Count       int  `json:"count"`
 	}
 
 	var req PingRequest
@@ -27,24 +31,54 @@ func PingAgent(c fiber.Ctx) error {
 		req.Count = 4
 	}
 
-	// Get source and dest agents
-	var sourceAgent, destAgent models.Agent
-	if err := db.DB.First(&sourceAgent, req.SourceAgentID).Error; err != nil {
-		return c.Status(404).JSON(fiber.Map{"error": "Source agent not found"})
-	}
+	var destAgent models.Agent
 	if err := db.DB.First(&destAgent, req.DestAgentID).Error; err != nil {
 		return c.Status(404).JSON(fiber.Map{"error": "Destination agent not found"})
 	}
 
-	// Simulate ping results (in real implementation, this would go through VPN)
+	if service.VPNNet == nil {
+		return c.Status(503).JSON(fiber.Map{"error": "VPN network not initialized"})
+	}
+
 	results := make([]map[string]interface{}, req.Count)
 	var totalLatency int64
 	successCount := 0
 
+	// We use TCP Connect as a "Ping" because ICMP is hard with netstack userspace without root/raw sockets sometimes
+	// or netstack might not expose Ping easily.
+	// Actually, netstack doesn't easily expose ICMP Ping. We will simulate "Ping" via TCP Handshake to port 80 or similar known port
+	// Or we can just try to dial anything. If we get "Connection Refused" (RST), it means the host is UP.
+	// If we get "Timeout", host is DOWN.
+
+	target := fmt.Sprintf("%s:80", destAgent.IP) // Default to port 80 check
+
 	for i := 0; i < req.Count; i++ {
-		// Simulate ping latency (5-50ms)
-		latency := 5 + (i * 10) // simulated
-		success := sourceAgent.Status == "online" && destAgent.Status == "online"
+		start := time.Now()
+		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+		conn, err := service.VPNNet.DialContext(ctx, "tcp", target)
+		cancel()
+		latency := time.Since(start).Milliseconds()
+
+		success := false
+		if err == nil {
+			conn.Close()
+			success = true
+		} else {
+			// If error is "connection refused", the host is actually UP but port is closed.
+			// This counts as a successful "Ping" (Reachability).
+			// If "timeout", it's Down.
+			// Currently simplified to success only on connect.
+			// Ideally we should check error type.
+			netErr, ok := err.(net.Error)
+			if ok && netErr.Timeout() {
+				success = false
+			} else {
+				// Connection refused or other error means route exists and host responded with RST
+				// logic: ping succeeds if host acts alive
+				// But for now let's be strict: strict TCP connect
+				// success = true // Uncomment if you want "refused" to count as UP
+			}
+		}
 
 		results[i] = map[string]interface{}{
 			"seq":     i + 1,
@@ -53,9 +87,10 @@ func PingAgent(c fiber.Ctx) error {
 		}
 
 		if success {
-			totalLatency += int64(latency)
+			totalLatency += latency
 			successCount++
 		}
+		time.Sleep(200 * time.Millisecond)
 	}
 
 	avgLatency := float64(0)
@@ -64,7 +99,7 @@ func PingAgent(c fiber.Ctx) error {
 	}
 
 	return c.JSON(fiber.Map{
-		"source":       sourceAgent.IP,
+		"source":       "Server (VPN Gateway)",
 		"destination":  destAgent.IP,
 		"packets_sent": req.Count,
 		"packets_recv": successCount,
@@ -77,10 +112,9 @@ func PingAgent(c fiber.Ctx) error {
 // CheckPort checks if a port is accessible on an agent
 func CheckPort(c fiber.Ctx) error {
 	type PortCheckRequest struct {
-		SourceAgentID uint   `json:"source_agent_id"`
-		DestAgentID   uint   `json:"dest_agent_id"`
-		Port          int    `json:"port"`
-		Protocol      string `json:"protocol"`
+		DestAgentID uint   `json:"dest_agent_id"` // Simplified: Server checks dest
+		Port        int    `json:"port"`
+		Protocol    string `json:"protocol"`
 	}
 
 	var req PortCheckRequest
@@ -92,106 +126,174 @@ func CheckPort(c fiber.Ctx) error {
 		req.Protocol = "tcp"
 	}
 
-	// Get agents
-	var sourceAgent, destAgent models.Agent
-	if err := db.DB.First(&sourceAgent, req.SourceAgentID).Error; err != nil {
-		return c.Status(404).JSON(fiber.Map{"error": "Source agent not found"})
-	}
-	if err := db.DB.Preload("Services").First(&destAgent, req.DestAgentID).Error; err != nil {
+	var destAgent models.Agent
+	if err := db.DB.First(&destAgent, req.DestAgentID).Error; err != nil {
 		return c.Status(404).JSON(fiber.Map{"error": "Destination agent not found"})
 	}
 
-	// Check if service is exposed
-	serviceFound := false
-	var serviceName string
-	for _, svc := range destAgent.Services {
-		if svc.Port == req.Port && svc.Enabled {
-			serviceFound = true
-			serviceName = svc.Name
-			break
-		}
+	if service.VPNNet == nil {
+		return c.Status(503).JSON(fiber.Map{"error": "VPN network not initialized"})
 	}
 
-	// Simulate connection test
+	target := fmt.Sprintf("%s:%d", destAgent.IP, req.Port)
 	start := time.Now()
-	success := destAgent.Status == "online" && (serviceFound || req.Port == 80) // Port 80 is always available for internal service
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	conn, err := service.VPNNet.DialContext(ctx, req.Protocol, target)
+	cancel()
 	latency := time.Since(start).Milliseconds()
-	if success {
-		latency = 10 + latency // add simulated network latency
-	}
 
 	status := "closed"
-	if success {
+	if err == nil {
 		status = "open"
+		conn.Close()
 	}
 
-	result := fiber.Map{
-		"source":      sourceAgent.IP,
-		"destination": fmt.Sprintf("%s:%d", destAgent.IP, req.Port),
+	return c.JSON(fiber.Map{
+		"source":      "Server",
+		"destination": target,
 		"port":        req.Port,
 		"protocol":    req.Protocol,
 		"status":      status,
 		"latency_ms":  latency,
-	}
-
-	if serviceName != "" {
-		result["service"] = serviceName
-	}
-
-	return c.JSON(result)
+	})
 }
 
-// Traceroute performs a traceroute between agents
+// HTTPCheck performs a REAL HTTP request through the VPN
+func HTTPCheck(c fiber.Ctx) error {
+	type HTTPRequest struct {
+		SourceAgentID uint   `json:"source_agent_id"` // Ignored, always Server
+		URL           string `json:"url"`
+		Method        string `json:"method"`
+	}
+
+	var req HTTPRequest
+	if err := c.Bind().Body(&req); err != nil {
+		return c.Status(400).JSON(fiber.Map{"error": "Invalid request"})
+	}
+
+	if req.Method == "" {
+		req.Method = "GET"
+	}
+
+	if service.VPNNet == nil {
+		return c.Status(503).JSON(fiber.Map{"error": "VPN network not initialized"})
+	}
+
+	// Create a custom HTTP client that uses the VPN Dialer
+	client := &http.Client{
+		Transport: &http.Transport{
+			DialContext: func(ctx context.Context, network, addr string) (net.Conn, error) {
+				return service.VPNNet.DialContext(ctx, network, addr)
+			},
+		},
+		Timeout: 5 * time.Second,
+	}
+
+	httpReq, err := http.NewRequest(req.Method, req.URL, nil)
+	if err != nil {
+		return c.Status(400).JSON(fiber.Map{
+			"error":  "Invalid URL",
+			"detail": err.Error(),
+		})
+	}
+
+	// Set User-Agent
+	httpReq.Header.Set("User-Agent", "ZeroZTA-Diagnostics/1.0")
+
+	start := time.Now()
+	resp, err := client.Do(httpReq)
+	duration := time.Since(start).Milliseconds()
+
+	if err != nil {
+		return c.JSON(fiber.Map{
+			"url":         req.URL,
+			"method":      req.Method,
+			"status_code": 0,
+			"status_text": "Error: " + err.Error(),
+			"duration_ms": duration,
+		})
+	}
+	defer resp.Body.Close()
+
+	// Capture headers
+	headers := make(map[string]string)
+	for k, v := range resp.Header {
+		if len(v) > 0 {
+			headers[k] = v[0]
+		}
+	}
+
+	return c.JSON(fiber.Map{
+		"url":         req.URL,
+		"method":      req.Method,
+		"status_code": resp.StatusCode,
+		"status_text": resp.Status,
+		"duration_ms": duration,
+		"headers":     headers,
+	})
+}
+
+// Traceroute (mocked for now as netstack doesn't easy expose TTL for true traceroute)
 func Traceroute(c fiber.Ctx) error {
+	// ... (Keep existing mock or remove if confusing. Let's keep existing mock but label it)
 	type TracerouteRequest struct {
 		SourceAgentID uint `json:"source_agent_id"`
 		DestAgentID   uint `json:"dest_agent_id"`
 		MaxHops       int  `json:"max_hops"`
 	}
+	// ... minimal implementation or just return "Not Supported in Userspace Networking yet"
+	// Returning the old mock for UI stability
+	return c.JSON(fiber.Map{
+		"source":      "Server",
+		"destination": "Target",
+		"hops": []map[string]interface{}{
+			{"hop": 1, "ip": "10.0.0.1", "host": "gateway", "latency": 1},
+			{"hop": 2, "ip": "10.0.0.x", "host": "target", "latency": 5},
+		},
+		"total_hops": 2,
+		"status":     "simulated",
+	})
+}
 
-	var req TracerouteRequest
+// DNSLookup performs a DNS lookup (Server Perspective)
+func DNSLookup(c fiber.Ctx) error {
+	type DNSRequest struct {
+		Domain     string `json:"domain"`
+		RecordType string `json:"record_type"`
+	}
+
+	var req DNSRequest
 	if err := c.Bind().Body(&req); err != nil {
 		return c.Status(400).JSON(fiber.Map{"error": "Invalid request"})
 	}
 
-	if req.MaxHops == 0 {
-		req.MaxHops = 30
-	}
+	// Use system resolver for now (server's perspective)
+	// Or use VPN resolver if configured?
+	// Let's use standard net.LookupHost which uses the container/host DNS.
 
-	// Get agents
-	var sourceAgent, destAgent models.Agent
-	if err := db.DB.First(&sourceAgent, req.SourceAgentID).Error; err != nil {
-		return c.Status(404).JSON(fiber.Map{"error": "Source agent not found"})
-	}
-	if err := db.DB.First(&destAgent, req.DestAgentID).Error; err != nil {
-		return c.Status(404).JSON(fiber.Map{"error": "Destination agent not found"})
-	}
+	start := time.Now()
+	ips, err := net.LookupHost(req.Domain)
+	latency := time.Since(start).Milliseconds()
 
-	// Simulate traceroute (in VPN, typically direct connection)
-	hops := []map[string]interface{}{
-		{
-			"hop":     1,
-			"ip":      "10.0.0.1",
-			"host":    "vpn-gateway",
-			"latency": 5,
-		},
-		{
-			"hop":     2,
-			"ip":      destAgent.IP,
-			"host":    destAgent.Name,
-			"latency": 12,
-		},
+	if err != nil {
+		return c.JSON(fiber.Map{
+			"domain":      req.Domain,
+			"record_type": req.RecordType,
+			"error":       err.Error(),
+			"latency_ms":  latency,
+		})
 	}
 
 	return c.JSON(fiber.Map{
-		"source":      sourceAgent.IP,
-		"destination": destAgent.IP,
-		"hops":        hops,
-		"total_hops":  len(hops),
+		"domain":      req.Domain,
+		"record_type": "A", // LookupHost returns IPs (A/AAAA)
+		"records":     ips,
+		"server":      "System Resolver",
+		"latency_ms":  latency,
 	})
 }
 
-// GetAllAccessLogs returns all access logs
+// Stub for access logs
 func GetAllAccessLogs(c fiber.Ctx) error {
 	limitStr := c.Query("limit", "100")
 	var limit int
@@ -206,86 +308,70 @@ func GetAllAccessLogs(c fiber.Ctx) error {
 	return c.JSON(logs)
 }
 
-// DNSLookup performs a DNS lookup
-func DNSLookup(c fiber.Ctx) error {
-	type DNSRequest struct {
-		SourceAgentID uint   `json:"source_agent_id"`
-		Domain        string `json:"domain"`
-		RecordType    string `json:"record_type"` // A, AAAA, MX, TXT, etc.
+// ProxyToAgent proxies HTTP requests to an agent via the VPN
+func ProxyToAgent(c fiber.Ctx) error {
+	targetIP := c.Query("ip")
+	port := c.Query("port", "80")
+	path := c.Query("path", "/")
+
+	if targetIP == "" {
+		return c.Status(400).SendString("Missing 'ip' query parameter")
 	}
 
-	var req DNSRequest
-	if err := c.Bind().Body(&req); err != nil {
-		return c.Status(400).JSON(fiber.Map{"error": "Invalid request"})
+	if service.VPNNet == nil {
+		return c.Status(503).SendString("VPN network not initialized")
 	}
 
-	if req.RecordType == "" {
-		req.RecordType = "A"
-	}
+	targetAddr := fmt.Sprintf("%s:%s", targetIP, port)
 
-	// Simulated DNS resolution
-	// In real world, this would execute `dig` or similar on the agent via VPN control channel
-	records := []string{}
-	if req.Domain == "localhost" {
-		records = []string{"127.0.0.1"}
-	} else if req.Domain == "internal.service" {
-		records = []string{"10.0.0.5", "10.0.0.6"}
-	} else {
-		// Random simulated IP
-		records = []string{fmt.Sprintf("10.0.0.%d", time.Now().UnixNano()%250+2)}
-	}
-
-	return c.JSON(fiber.Map{
-		"domain":      req.Domain,
-		"record_type": req.RecordType,
-		"records":     records,
-		"server":      "10.0.0.1 (VPN DNS)",
-		"latency_ms":  15,
-	})
-}
-
-// HTTPCheck performs an HTTP request check
-func HTTPCheck(c fiber.Ctx) error {
-	type HTTPRequest struct {
-		SourceAgentID uint   `json:"source_agent_id"`
-		URL           string `json:"url"`
-		Method        string `json:"method"`
-	}
-
-	var req HTTPRequest
-	if err := c.Bind().Body(&req); err != nil {
-		return c.Status(400).JSON(fiber.Map{"error": "Invalid request"})
-	}
-
-	if req.Method == "" {
-		req.Method = "GET"
-	}
-
-	// Simulated HTTP check
-	statusCode := 200
-	statusText := "OK"
-	duration := 45 // ms
-
-	return c.JSON(fiber.Map{
-		"url":         req.URL,
-		"method":      req.Method,
-		"status_code": statusCode,
-		"status_text": statusText,
-		"duration_ms": duration,
-		"headers": map[string]string{
-			"Content-Type": "application/json",
-			"Server":       "ZeroZTA-Agent/1.0",
-		},
-	})
-}
-
-// Helper to check TCP port (for real implementation)
-func checkTCPPort(host string, port int, timeout time.Duration) bool {
-	addr := fmt.Sprintf("%s:%d", host, port)
-	conn, err := net.DialTimeout("tcp", addr, timeout)
+	// Dial the target via VPN
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	conn, err := service.VPNNet.DialContext(ctx, "tcp", targetAddr)
 	if err != nil {
-		return false
+		return c.Status(502).SendString(fmt.Sprintf("Failed to connect to agent %s: %v", targetAddr, err))
 	}
-	conn.Close()
-	return true
+	defer conn.Close()
+
+	// Construct request
+	// Note: basic implementation. For full proxying, we'd use httputil.ReverseProxy with a custom Transport.
+	// But for "debug/test", a simple write/read works or a custom client.
+
+	// Let's use http.Client with custom transport to handle valid HTTP framing
+	bgTransport := &http.Transport{
+		DialContext: func(ctx context.Context, network, addr string) (net.Conn, error) {
+			// Ignore addr, dial our target
+			return service.VPNNet.DialContext(ctx, "tcp", targetAddr)
+		},
+	}
+	client := &http.Client{
+		Transport: bgTransport,
+		Timeout:   10 * time.Second,
+		CheckRedirect: func(req *http.Request, via []*http.Request) error {
+			return http.ErrUseLastResponse // Don't follow redirects automatically
+		},
+	}
+
+	// targetURL is dummy because DialContext overrides it
+	reqURL := fmt.Sprintf("http://dummy%s", path)
+	req, err := http.NewRequest("GET", reqURL, nil)
+	if err != nil {
+		return c.Status(500).SendString(err.Error())
+	}
+
+	resp, err := client.Do(req)
+	if err != nil {
+		return c.Status(502).SendString(fmt.Sprintf("Proxy request failed: %v", err))
+	}
+	defer resp.Body.Close()
+
+	// Copy headers
+	for k, v := range resp.Header {
+		c.Set(k, v[0])
+	}
+	c.Status(resp.StatusCode)
+
+	// Stream body
+	body, _ := io.ReadAll(resp.Body)
+	return c.Send(body)
 }

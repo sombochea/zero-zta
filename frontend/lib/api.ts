@@ -12,6 +12,7 @@ export interface Agent {
   group_id?: number;
   group?: Group;
   routes?: string;
+  version?: string;
   services?: Service[];
   created_at: string;
   updated_at: string;
