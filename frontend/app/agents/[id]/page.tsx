@@ -75,7 +75,10 @@ import {
     XCircle,
     Clock,
     Terminal,
-    Network
+    Network,
+    Cpu,
+    Zap,
+    Globe
 } from "lucide-react";
 import { toast } from "sonner";
 import Link from "next/link";
@@ -257,7 +260,7 @@ export default function AgentDetailPage() {
     if (loading) {
         return (
             <div className="space-y-6">
-                <Skeleton className="h-12 w-full" />
+                <Skeleton className="h-20 w-full" />
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                     <Skeleton className="h-64 w-full" />
                     <Skeleton className="h-64 w-full col-span-2" />
@@ -274,104 +277,105 @@ export default function AgentDetailPage() {
     const { inbound, outbound } = getEffectivePolicies();
 
     return (
-        <div className="space-y-6">
-            {/* Header */}
-            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-                <div className="flex items-center gap-4">
-                    <Button variant="ghost" size="icon" asChild>
-                        <Link href="/agents">
-                            <ArrowLeft className="h-5 w-5" />
-                        </Link>
-                    </Button>
-                    <div>
-                        <div className="flex items-center gap-3">
-                            <h1 className="text-3xl font-bold tracking-tight">{agent.name}</h1>
-                            <div className={cn("flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-medium border",
-                                agent.status === "online"
-                                    ? "bg-green-500/10 text-green-600 border-green-200 dark:border-green-900"
-                                    : "bg-zinc-100 text-zinc-500 border-zinc-200 dark:bg-zinc-800 dark:text-zinc-400 dark:border-zinc-700")}>
-                                <div className={cn("w-1.5 h-1.5 rounded-full", agent.status === "online" ? "bg-green-500" : "bg-zinc-400")} />
-                                {agent.status.toUpperCase()}
+        <div className="space-y-8 animate-in fade-in duration-500">
+            {/* Modern Hero Header */}
+            <div className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-background to-secondary/30 border p-8">
+                <div className="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-6">
+                    <div className="space-y-4">
+                        <div className="flex items-center gap-4">
+                            <Button variant="ghost" size="icon" className="rounded-full h-10 w-10 hover:bg-secondary" asChild>
+                                <Link href="/agents">
+                                    <ArrowLeft className="h-5 w-5" />
+                                </Link>
+                            </Button>
+                            <div>
+                                <h1 className="text-3xl font-bold tracking-tight bg-clip-text text-transparent bg-gradient-to-r from-foreground to-foreground/70">
+                                    {agent.name}
+                                </h1>
+                                <div className="flex items-center gap-3 mt-2 text-muted-foreground">
+                                    <Activity className={cn("h-4 w-4", agent.status === "online" ? "text-green-500" : "text-zinc-500")} />
+                                    <span className="text-sm font-medium">{agent.status.toUpperCase()}</span>
+                                    <span className="text-zinc-300 dark:text-zinc-700">•</span>
+                                    <span className="font-mono text-sm">{agent.ip}</span>
+                                </div>
                             </div>
                         </div>
-                        <p className="text-muted-foreground font-mono text-sm mt-1">{agent.ip}</p>
+                    </div>
+
+                    <div className="flex flex-wrap items-center gap-3">
+                        <div className="flex items-center gap-2 px-4 py-2 bg-background/50 backdrop-blur-sm rounded-lg border shadow-sm">
+                            <Shield className="h-4 w-4 text-primary" />
+                            <span className="text-sm font-medium">
+                                {agent.group ? agent.group.name : "Unassigned"}
+                            </span>
+                        </div>
+                        <div className="h-8 w-[1px] bg-border hidden md:block"></div>
+                        <Button variant="outline" className="shadow-sm" onClick={() => setEditDialogOpen(true)}>
+                            <Edit className="mr-2 h-4 w-4" />
+                            Edit
+                        </Button>
+                        <Button variant="destructive" size="icon" className="shadow-sm" onClick={handleRegenerateKey}>
+                            <Key className="h-4 w-4" />
+                        </Button>
                     </div>
                 </div>
-                <div className="flex gap-2">
-                    <Button variant="outline" onClick={() => setEditDialogOpen(true)}>
-                        <Edit className="mr-2 h-4 w-4" />
-                        Edit Agent
-                    </Button>
-                    <Button variant="destructive" size="icon" onClick={handleRegenerateKey} title="Regenerate API Key">
-                        <Key className="h-4 w-4" />
-                    </Button>
-                </div>
+                {/* Decorative background element */}
+                <div className="absolute -top-24 -right-24 h-64 w-64 bg-primary/5 rounded-full blur-3xl p-10"></div>
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-12 gap-6">
                 {/* Info Column */}
                 <div className="md:col-span-4 space-y-6">
-                    <Card>
-                        <CardHeader>
-                            <CardTitle className="text-lg">Identity</CardTitle>
+                    <Card className="shadow-sm hover:shadow-md transition-shadow border-primary/10 bg-gradient-to-b from-card to-card/50">
+                        <CardHeader className="pb-2">
+                            <div className="flex items-center gap-2 mb-1">
+                                <Cpu className="h-4 w-4 text-primary" />
+                                <h3 className="text-sm font-medium text-muted-foreground uppercase tracking-wider">Performance</h3>
+                            </div>
                         </CardHeader>
-                        <CardContent className="space-y-4">
-                            <div>
-                                <Label className="text-xs text-muted-foreground uppercase tracking-wider">Group Assignment</Label>
-                                <div className="flex items-center gap-2 mt-1">
-                                    {agent.group ? (
-                                        <Badge variant="outline" className="text-sm py-1">
-                                            <Shield className="w-3 h-3 mr-1" />
-                                            {agent.group.name}
-                                        </Badge>
-                                    ) : (
-                                        <div className="text-sm text-yellow-600 flex items-center gap-1">
-                                            <XCircle className="w-4 h-4" />
-                                            No Group Assigned
-                                        </div>
-                                    )}
-                                </div>
-                            </div>
-                            <div>
-                                <Label className="text-xs text-muted-foreground uppercase tracking-wider">Agent ID</Label>
-                                <p className="font-mono text-sm mt-1">{agent.id}</p>
-                            </div>
-                            <div>
-                                <Label className="text-xs text-muted-foreground uppercase tracking-wider">Description</Label>
-                                <p className="text-sm mt-1">{agent.description || "No description provided."}</p>
-                            </div>
-                            <div className="pt-2 border-t">
-                                <Label className="text-xs text-muted-foreground uppercase tracking-wider">Metrics</Label>
-                                <div className="grid grid-cols-2 gap-4 mt-2">
-                                    <div>
-                                        <div className="text-2xl font-bold">{latestMetric ? `${latestMetric.heartbeat_latency_ms}ms` : "-"}</div>
-                                        <div className="text-xs text-muted-foreground">Latency</div>
+                        <CardContent>
+                            <div className="grid grid-cols-2 gap-4">
+                                <div className="p-3 rounded-xl bg-secondary/50 border">
+                                    <div className="text-xs text-muted-foreground mb-1">Latency</div>
+                                    <div className="text-2xl font-bold font-mono tracking-tight text-primary">
+                                        {latestMetric ? latestMetric.heartbeat_latency_ms : "-"}
+                                        <span className="text-sm text-muted-foreground font-normal ml-1">ms</span>
                                     </div>
-                                    <div>
-                                        <div className="text-2xl font-bold">{latestMetric ? latestMetric.active_connections : "-"}</div>
-                                        <div className="text-xs text-muted-foreground">Active Conns</div>
+                                </div>
+                                <div className="p-3 rounded-xl bg-secondary/50 border">
+                                    <div className="text-xs text-muted-foreground mb-1">Connections</div>
+                                    <div className="text-2xl font-bold font-mono tracking-tight">
+                                        {latestMetric ? latestMetric.active_connections : "-"}
                                     </div>
                                 </div>
                             </div>
                         </CardContent>
                     </Card>
 
-                    <Card>
+                    <Card className="shadow-sm border-l-4 border-l-primary/50">
                         <CardHeader>
-                            <CardTitle className="text-lg">Connectivity</CardTitle>
+                            <CardTitle className="text-lg">Network Identity</CardTitle>
                         </CardHeader>
                         <CardContent className="space-y-4 text-sm">
-                            <div className="flex justify-between items-center">
-                                <span className="text-muted-foreground">Last Seen</span>
-                                <span>{agent.last_seen ? new Date(agent.last_seen).toLocaleString() : "Never"}</span>
+                            <div className="flex justify-between items-center py-2 border-b border-dashed">
+                                <span className="text-muted-foreground">ID</span>
+                                <span className="font-mono">{agent.id}</span>
                             </div>
-                            <div className="flex justify-between items-center">
-                                <span className="text-muted-foreground">Registered</span>
-                                <span>{new Date(agent.created_at).toLocaleDateString()}</span>
-                            </div>
-                            <div className="flex justify-between items-center">
+                            <div className="flex justify-between items-center py-2 border-b border-dashed">
                                 <span className="text-muted-foreground">Public Key</span>
-                                <span className="font-mono text-xs truncate max-w-[150px]" title={agent.public_key}>{agent.public_key || "Not set"}</span>
+                                <span className="font-mono text-xs truncate max-w-[120px] bg-secondary px-2 py-1 rounded" title={agent.public_key}>
+                                    {agent.public_key?.substring(0, 16) || "Not set"}...
+                                </span>
+                            </div>
+                            <div className="flex justify-between items-center py-2 border-b border-dashed">
+                                <span className="text-muted-foreground">Last Seen</span>
+                                <span>{agent.last_seen ? new Date(agent.last_seen).toLocaleTimeString() : "Never"}</span>
+                            </div>
+                            <div className="pt-2">
+                                <span className="text-muted-foreground block mb-2">Description</span>
+                                <p className="text-sm leading-relaxed">
+                                    {agent.description || "No description provided."}
+                                </p>
                             </div>
                         </CardContent>
                     </Card>
@@ -379,83 +383,88 @@ export default function AgentDetailPage() {
 
                 {/* Tabs Column */}
                 <div className="md:col-span-8">
-                    <Tabs defaultValue="overview" className="space-y-4">
-                        <TabsList className="w-full justify-start border-b rounded-none h-auto p-0 bg-transparent gap-6">
+                    <Tabs defaultValue="overview" className="space-y-6">
+                        <TabsList className="w-full justify-start overflow-x-auto border-b rounded-none h-auto p-0 bg-transparent gap-2 no-scrollbar">
                             <TabsTrigger
                                 value="overview"
-                                className="rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent px-0 py-2"
+                                className="rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:text-primary data-[state=active]:bg-transparent px-4 py-3 text-base font-medium transition-colors hover:text-primary/70"
                             >
                                 Overview
                             </TabsTrigger>
                             <TabsTrigger
                                 value="services"
-                                className="rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent px-0 py-2"
+                                className="rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:text-primary data-[state=active]:bg-transparent px-4 py-3 text-base font-medium transition-colors hover:text-primary/70"
                             >
                                 Services
                             </TabsTrigger>
                             <TabsTrigger
                                 value="policies"
-                                className="rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent px-0 py-2"
+                                className="rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:text-primary data-[state=active]:bg-transparent px-4 py-3 text-base font-medium transition-colors hover:text-primary/70"
                             >
                                 Policies
-                                <Badge className="ml-2 h-5 px-1.5 rounded-full" variant="secondary">{inbound.length + outbound.length}</Badge>
+                                <Badge className="ml-2 h-5 px-1.5 rounded-full bg-primary/10 text-primary border-0" variant="secondary">{inbound.length + outbound.length}</Badge>
                             </TabsTrigger>
                             <TabsTrigger
                                 value="routes"
-                                className="rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent px-0 py-2"
+                                className="rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:text-primary data-[state=active]:bg-transparent px-4 py-3 text-base font-medium transition-colors hover:text-primary/70"
                             >
                                 Routes
                             </TabsTrigger>
                             <TabsTrigger
                                 value="logs"
-                                className="rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent px-0 py-2"
+                                className="rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:text-primary data-[state=active]:bg-transparent px-4 py-3 text-base font-medium transition-colors hover:text-primary/70"
                             >
                                 Logs
                             </TabsTrigger>
                         </TabsList>
 
                         {/* Overview Tab */}
-                        <TabsContent value="overview" className="space-y-4 pt-4">
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                <Card>
+                        <TabsContent value="overview" className="space-y-6 pt-2">
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                <Card className="border-t-4 border-t-emerald-500/50">
                                     <CardHeader className="pb-2">
-                                        <CardTitle className="text-sm font-medium text-muted-foreground">Throughput</CardTitle>
+                                        <CardTitle className="text-sm font-medium text-muted-foreground flex items-center gap-2">
+                                            <Zap className="h-4 w-4" /> Traffic Throughput
+                                        </CardTitle>
                                     </CardHeader>
                                     <CardContent>
                                         <div className="flex items-baseline gap-2">
-                                            <div className="text-2xl font-bold">
-                                                {latestMetric ? (latestMetric.bytes_sent + latestMetric.bytes_received / 1024 / 1024).toFixed(2) : "0.00"}
+                                            <div className="text-3xl font-bold tracking-tighter">
+                                                {latestMetric ? ((latestMetric.bytes_sent + latestMetric.bytes_received) / 1024 / 1024).toFixed(2) : "0.00"}
                                             </div>
-                                            <span className="text-sm text-muted-foreground">MB Total</span>
+                                            <span className="text-sm font-medium text-muted-foreground">MB Total</span>
                                         </div>
-                                        <div className="mt-4 flex items-center justify-between text-xs">
-                                            <div className="flex items-center text-blue-500">
-                                                <ArrowUp className="w-3 h-3 mr-1" />
-                                                {(latestMetric?.bytes_sent || 0 / 1024 / 1024).toFixed(2)} MB Sent
+                                        <div className="mt-6 flex items-center justify-between text-sm py-3 px-4 bg-secondary/30 rounded-lg">
+                                            <div className="flex items-center text-emerald-600 dark:text-emerald-400 font-medium">
+                                                <ArrowUp className="w-4 h-4 mr-1.5" />
+                                                {(latestMetric?.bytes_sent || 0 / 1024 / 1024).toFixed(2)} MB Tx
                                             </div>
-                                            <div className="flex items-center text-green-500">
-                                                <ArrowDown className="w-3 h-3 mr-1" />
-                                                {(latestMetric?.bytes_received || 0 / 1024 / 1024).toFixed(2)} MB Recv
+                                            <div className="w-[1px] h-4 bg-border"></div>
+                                            <div className="flex items-center text-blue-600 dark:text-blue-400 font-medium">
+                                                <ArrowDown className="w-4 h-4 mr-1.5" />
+                                                {(latestMetric?.bytes_received || 0 / 1024 / 1024).toFixed(2)} MB Rx
                                             </div>
                                         </div>
                                     </CardContent>
                                 </Card>
                                 <Card>
                                     <CardHeader className="pb-2">
-                                        <CardTitle className="text-sm font-medium text-muted-foreground">Recent Activity</CardTitle>
+                                        <CardTitle className="text-sm font-medium text-muted-foreground flex items-center gap-2">
+                                            <Activity className="h-4 w-4" /> Live Activity
+                                        </CardTitle>
                                     </CardHeader>
                                     <CardContent>
-                                        <div className="space-y-2">
+                                        <div className="space-y-4">
                                             {accessLogs.slice(0, 3).map((log) => (
-                                                <div key={log.id} className="flex items-center justify-between text-xs">
-                                                    <div className="flex items-center gap-2">
-                                                        <div className={cn("w-1.5 h-1.5 rounded-full", log.action === "allowed" ? "bg-green-500" : "bg-red-500")} />
-                                                        <span className="truncate max-w-[100px]">{log.service?.name || `Port ${log.port}`}</span>
+                                                <div key={log.id} className="flex items-center justify-between text-sm bg-muted/20 p-2 rounded-md hover:bg-muted/40 transition-colors">
+                                                    <div className="flex items-center gap-3">
+                                                        <div className={cn("w-2 h-2 rounded-full ring-2 ring-offset-1 ring-offset-background", log.action === "allowed" ? "bg-green-500 ring-green-500/30" : "bg-red-500 ring-red-500/30")} />
+                                                        <span className="truncate font-medium">{log.service?.name || `Port ${log.port}`}</span>
                                                     </div>
-                                                    <span className="text-muted-foreground">{new Date(log.created_at).toLocaleTimeString()}</span>
+                                                    <span className="text-xs text-muted-foreground font-mono">{new Date(log.created_at).toLocaleTimeString()}</span>
                                                 </div>
                                             ))}
-                                            {accessLogs.length === 0 && <p className="text-xs text-muted-foreground">No recent connections</p>}
+                                            {accessLogs.length === 0 && <p className="text-sm text-muted-foreground text-center py-4">No recent activity detected.</p>}
                                         </div>
                                     </CardContent>
                                 </Card>
@@ -463,16 +472,16 @@ export default function AgentDetailPage() {
                         </TabsContent>
 
                         {/* Services Tab */}
-                        <TabsContent value="services" className="pt-4">
-                            <Card>
-                                <CardHeader className="flex flex-row items-center justify-between">
+                        <TabsContent value="services" className="pt-2">
+                            <Card className="border-t-4 border-t-purple-500/50">
+                                <CardHeader className="flex flex-row items-center justify-between border-b bg-muted/20 pb-4">
                                     <div>
                                         <CardTitle>Exposed Services</CardTitle>
                                         <CardDescription>Services available to authenticated agents</CardDescription>
                                     </div>
                                     <Dialog open={serviceDialogOpen} onOpenChange={setServiceDialogOpen}>
                                         <DialogTrigger asChild>
-                                            <Button size="sm">
+                                            <Button size="sm" className="shadow-sm">
                                                 <Plus className="mr-2 h-4 w-4" />
                                                 Add Service
                                             </Button>
@@ -534,35 +543,47 @@ export default function AgentDetailPage() {
                                         </DialogContent>
                                     </Dialog>
                                 </CardHeader>
-                                <CardContent>
+                                <CardContent className="p-0">
                                     {services.length === 0 ? (
-                                        <div className="flex flex-col items-center justify-center py-8 text-muted-foreground">
-                                            <Server className="h-8 w-8 opacity-20 mb-2" />
-                                            <p>No services exposed</p>
+                                        <div className="flex flex-col items-center justify-center py-12 text-muted-foreground">
+                                            <div className="bg-muted p-4 rounded-full mb-3">
+                                                <Server className="h-6 w-6 opacity-40" />
+                                            </div>
+                                            <p className="font-medium">No services exposed</p>
                                         </div>
                                     ) : (
                                         <Table>
                                             <TableHeader>
-                                                <TableRow>
-                                                    <TableHead>Service</TableHead>
-                                                    <TableHead>Details</TableHead>
+                                                <TableRow className="hover:bg-transparent">
+                                                    <TableHead className="w-[300px]">Service</TableHead>
+                                                    <TableHead>Protocol</TableHead>
                                                     <TableHead className="text-right">Actions</TableHead>
                                                 </TableRow>
                                             </TableHeader>
                                             <TableBody>
                                                 {services.map((service) => (
-                                                    <TableRow key={service.id}>
+                                                    <TableRow key={service.id} className="group">
                                                         <TableCell>
-                                                            <div className="font-medium">{service.name}</div>
-                                                            <div className="text-xs text-muted-foreground">{service.description}</div>
+                                                            <div className="flex items-center gap-3">
+                                                                <div className="bg-purple-100 dark:bg-purple-900/30 p-2 rounded-lg text-purple-600 dark:text-purple-400">
+                                                                    <Server className="h-4 w-4" />
+                                                                </div>
+                                                                <div>
+                                                                    <div className="font-semibold">{service.name}</div>
+                                                                    <div className="text-xs text-muted-foreground">{service.description}</div>
+                                                                </div>
+                                                            </div>
                                                         </TableCell>
                                                         <TableCell>
-                                                            <Badge variant="outline" className="font-mono text-xs">
-                                                                {service.port}/{service.protocol}
-                                                            </Badge>
+                                                            <div className="flex items-center gap-2">
+                                                                <Badge variant="secondary" className="font-mono text-xs">
+                                                                    {service.port}
+                                                                </Badge>
+                                                                <span className="text-xs text-muted-foreground uppercase">{service.protocol}</span>
+                                                            </div>
                                                         </TableCell>
                                                         <TableCell className="text-right">
-                                                            <Button variant="ghost" size="icon" onClick={() => handleDeleteService(service.id)}>
+                                                            <Button variant="ghost" size="icon" className="opacity-0 group-hover:opacity-100 transition-opacity" onClick={() => handleDeleteService(service.id)}>
                                                                 <Trash2 className="h-4 w-4 text-destructive" />
                                                             </Button>
                                                         </TableCell>
@@ -576,17 +597,18 @@ export default function AgentDetailPage() {
                         </TabsContent>
 
                         {/* Policies Tab */}
-                        <TabsContent value="policies" className="pt-4 space-y-4">
+                        <TabsContent value="policies" className="pt-2 space-y-6">
                             {!agent.group_id ? (
-                                <Card className="border-yellow-200 bg-yellow-50 dark:border-yellow-800 dark:bg-yellow-900/20">
-                                    <CardContent className="pt-6">
-                                        <div className="flex items-center gap-2 text-yellow-800 dark:text-yellow-200">
-                                            <Shield className="h-5 w-5" />
-                                            <p>No policies applied because this agent is not in a group.</p>
-                                        </div>
+                                <Card className="border-yellow-200 bg-yellow-50 dark:border-yellow-800 dark:bg-yellow-900/20 border-dashed border-2 shadow-none">
+                                    <CardContent className="pt-6 flex flex-col items-center justify-center text-center">
+                                        <Shield className="h-10 w-10 text-yellow-600 mb-3 opacity-80" />
+                                        <h3 className="text-yellow-800 dark:text-yellow-200 font-medium mb-1">Policy Enforcement Disabled</h3>
+                                        <p className="text-yellow-700 dark:text-yellow-300 text-sm max-w-md mb-4">
+                                            This agent belongs to no group, so security policies cannot be applied.
+                                        </p>
                                         <Button
-                                            variant="link"
-                                            className="px-0 text-yellow-800 dark:text-yellow-200 underline"
+                                            variant="outline"
+                                            className="border-yellow-300 bg-yellow-100 hover:bg-yellow-200 dark:bg-yellow-900/40 dark:border-yellow-700 text-yellow-800 dark:text-yellow-200"
                                             onClick={() => setEditDialogOpen(true)}
                                         >
                                             Assign to Group
@@ -597,23 +619,39 @@ export default function AgentDetailPage() {
                                 <>
                                     <Card>
                                         <CardHeader>
-                                            <CardTitle className="text-base">Inbound Policies</CardTitle>
+                                            <CardTitle className="text-base flex items-center gap-2">
+                                                <div className="h-2 w-2 rounded-full bg-green-500"></div>
+                                                Inbound Rules
+                                            </CardTitle>
                                             <CardDescription>Who can access this agent</CardDescription>
                                         </CardHeader>
                                         <CardContent>
                                             {inbound.length === 0 ? (
-                                                <p className="text-sm text-muted-foreground">No inbound policies.</p>
+                                                <div className="text-sm text-muted-foreground italic p-4 text-center bg-muted/20 rounded-lg">No inbound policies active.</div>
                                             ) : (
-                                                <div className="space-y-2">
+                                                <div className="space-y-3">
                                                     {inbound.map(p => (
-                                                        <div key={p.id} className="flex items-center justify-between p-3 border rounded-lg bg-muted/40 text-sm">
-                                                            <div className="flex items-center gap-2">
-                                                                {p.action === "allow" ? <CheckCircle2 className="h-4 w-4 text-green-500" /> : <XCircle className="h-4 w-4 text-red-500" />}
-                                                                <span className="font-medium">{p.source_group?.name || "Unknown"}</span>
-                                                                <span className="text-muted-foreground">can access</span>
-                                                                <Badge variant="outline">{p.allowed_ports}</Badge>
+                                                        <div key={p.id} className="flex items-center justify-between p-4 border rounded-xl bg-card hover:bg-muted/30 transition-colors">
+                                                            <div className="flex items-center gap-3">
+                                                                <div className={cn("p-2 rounded-full bg-opacity-10", p.action === "allow" ? "bg-green-500 text-green-500" : "bg-red-500 text-red-500")}>
+                                                                    {p.action === "allow" ? <CheckCircle2 className="h-4 w-4" /> : <XCircle className="h-4 w-4" />}
+                                                                </div>
+                                                                <div>
+                                                                    <div className="font-medium flex items-center gap-2">
+                                                                        <span className={cn(p.action === "allow" ? "text-green-600 dark:text-green-400" : "text-red-600 dark:text-red-400 capitalize")}>
+                                                                            {p.action}
+                                                                        </span>
+                                                                        <span>access from</span>
+                                                                        <Badge variant="outline" className="text-sm">{p.source_group?.name || "Unknown"}</Badge>
+                                                                    </div>
+                                                                    <div className="text-xs text-muted-foreground mt-1">
+                                                                        Ports: {p.allowed_ports}
+                                                                    </div>
+                                                                </div>
                                                             </div>
-                                                            <Link href="/policies" className="text-xs text-blue-500 hover:underline">View</Link>
+                                                            <Button variant="ghost" size="sm" asChild>
+                                                                <Link href="/policies" className="text-xs">View</Link>
+                                                            </Button>
                                                         </div>
                                                     ))}
                                                 </div>
@@ -623,23 +661,39 @@ export default function AgentDetailPage() {
 
                                     <Card>
                                         <CardHeader>
-                                            <CardTitle className="text-base">Outbound Policies</CardTitle>
+                                            <CardTitle className="text-base flex items-center gap-2">
+                                                <div className="h-2 w-2 rounded-full bg-blue-500"></div>
+                                                Outbound Rules
+                                            </CardTitle>
                                             <CardDescription>Who this agent can access</CardDescription>
                                         </CardHeader>
                                         <CardContent>
                                             {outbound.length === 0 ? (
-                                                <p className="text-sm text-muted-foreground">No outbound policies.</p>
+                                                <div className="text-sm text-muted-foreground italic p-4 text-center bg-muted/20 rounded-lg">No outbound policies active.</div>
                                             ) : (
-                                                <div className="space-y-2">
+                                                <div className="space-y-3">
                                                     {outbound.map(p => (
-                                                        <div key={p.id} className="flex items-center justify-between p-3 border rounded-lg bg-muted/40 text-sm">
-                                                            <div className="flex items-center gap-2">
-                                                                {p.action === "allow" ? <CheckCircle2 className="h-4 w-4 text-green-500" /> : <XCircle className="h-4 w-4 text-red-500" />}
-                                                                <span className="text-muted-foreground">Can access</span>
-                                                                <span className="font-medium">{p.dest_group?.name || "Unknown"}</span>
-                                                                <Badge variant="outline">{p.allowed_ports}</Badge>
+                                                        <div key={p.id} className="flex items-center justify-between p-4 border rounded-xl bg-card hover:bg-muted/30 transition-colors">
+                                                            <div className="flex items-center gap-3">
+                                                                <div className={cn("p-2 rounded-full bg-opacity-10", p.action === "allow" ? "bg-green-500 text-green-500" : "bg-red-500 text-red-500")}>
+                                                                    {p.action === "allow" ? <CheckCircle2 className="h-4 w-4" /> : <XCircle className="h-4 w-4" />}
+                                                                </div>
+                                                                <div>
+                                                                    <div className="font-medium flex items-center gap-2">
+                                                                        <span className={cn(p.action === "allow" ? "text-green-600 dark:text-green-400" : "text-red-600 dark:text-red-400 capitalize")}>
+                                                                            {p.action}
+                                                                        </span>
+                                                                        <span>access to</span>
+                                                                        <Badge variant="outline" className="text-sm">{p.dest_group?.name || "Unknown"}</Badge>
+                                                                    </div>
+                                                                    <div className="text-xs text-muted-foreground mt-1">
+                                                                        Ports: {p.allowed_ports}
+                                                                    </div>
+                                                                </div>
                                                             </div>
-                                                            <Link href="/policies" className="text-xs text-blue-500 hover:underline">View</Link>
+                                                            <Button variant="ghost" size="sm" asChild>
+                                                                <Link href="/policies" className="text-xs">View</Link>
+                                                            </Button>
                                                         </div>
                                                     ))}
                                                 </div>
@@ -651,65 +705,92 @@ export default function AgentDetailPage() {
                         </TabsContent>
 
                         {/* Routes Tab */}
-                        <TabsContent value="routes" className="pt-4">
-                            <Card>
-                                <CardHeader>
-                                    <CardTitle>Advertised Routes</CardTitle>
-                                    <CardDescription>Subnets reachable via this agent</CardDescription>
-                                </CardHeader>
-                                <CardContent className="space-y-4">
-                                    <div className="flex gap-2">
-                                        <Input
-                                            placeholder="e.g. 192.168.1.0/24"
-                                            value={newRoute}
-                                            onChange={(e) => setNewRoute(e.target.value)}
-                                            className="max-w-xs"
-                                        />
-                                        <Button onClick={handleAddRoute}>Add</Button>
+                        <TabsContent value="routes" className="pt-2">
+                            <Card className="overflow-hidden">
+                                <CardHeader className="bg-muted/20">
+                                    <div className="flex items-center gap-2">
+                                        <Globe className="h-4 w-4 text-primary" />
+                                        <div>
+                                            <CardTitle>Advertised Routes</CardTitle>
+                                            <CardDescription>Subnets reachable via this agent</CardDescription>
+                                        </div>
                                     </div>
-                                    <div className="space-y-2">
+                                </CardHeader>
+                                <CardContent className="space-y-6 pt-6">
+                                    <div className="flex gap-3">
+                                        <div className="relative flex-1 max-w-sm">
+                                            <Network className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
+                                            <Input
+                                                placeholder="e.g. 192.168.1.0/24"
+                                                value={newRoute}
+                                                onChange={(e) => setNewRoute(e.target.value)}
+                                                className="pl-9"
+                                            />
+                                        </div>
+                                        <Button onClick={handleAddRoute}>Add Route</Button>
+                                    </div>
+                                    <div className="grid gap-3">
                                         {routes.map((route) => (
-                                            <div key={route} className="flex items-center justify-between p-3 bg-muted rounded-lg">
-                                                <div className="flex items-center gap-2">
-                                                    <Network className="h-4 w-4 text-muted-foreground" />
-                                                    <span className="font-mono text-sm">{route}</span>
+                                            <div key={route} className="flex items-center justify-between p-4 bg-card border rounded-lg shadow-sm">
+                                                <div className="flex items-center gap-3">
+                                                    <div className="bg-blue-100 dark:bg-blue-900/30 p-2 rounded text-blue-600">
+                                                        <Network className="h-4 w-4" />
+                                                    </div>
+                                                    <span className="font-mono text-sm font-medium">{route}</span>
                                                 </div>
-                                                <Button variant="ghost" size="sm" onClick={() => handleRemoveRoute(route)}>
-                                                    <Trash2 className="h-4 w-4 text-destructive" />
+                                                <Button variant="ghost" size="sm" onClick={() => handleRemoveRoute(route)} className="hover:bg-destructive/10 hover:text-destructive">
+                                                    <Trash2 className="h-4 w-4" />
                                                 </Button>
                                             </div>
                                         ))}
-                                        {routes.length === 0 && <p className="text-sm text-muted-foreground">No routes advertised available.</p>}
+                                        {routes.length === 0 && <div className="text-center py-8 text-muted-foreground bg-muted/10 rounded-lg border border-dashed">No advertised routes.</div>}
                                     </div>
                                 </CardContent>
                             </Card>
                         </TabsContent>
 
                         {/* Logs Tab */}
-                        <TabsContent value="logs" className="pt-4 space-y-6">
+                        <TabsContent value="logs" className="pt-2 space-y-6">
                             <Card>
-                                <CardHeader>
-                                    <CardTitle>Access Logs</CardTitle>
+                                <CardHeader className="flex flex-row items-center justify-between">
+                                    <CardTitle className="text-base">Access Logs</CardTitle>
                                 </CardHeader>
                                 <CardContent>
-                                    <div className="space-y-2">
-                                        {accessLogs.slice(0, 10).map((log) => (
-                                            <div key={log.id} className="flex items-center justify-between p-2 border-b text-sm last:border-0">
-                                                <div className="flex items-center gap-3">
-                                                    <Badge variant={log.action === "allowed" ? "default" : "destructive"}>
-                                                        {log.action}
-                                                    </Badge>
-                                                    <div>
-                                                        <span className="font-medium">{log.service?.name || "Direct"}</span>
-                                                        <span className="text-muted-foreground ml-2">:{log.port}</span>
-                                                    </div>
-                                                </div>
-                                                <span className="text-xs text-muted-foreground">
-                                                    {new Date(log.created_at).toLocaleString()}
-                                                </span>
-                                            </div>
-                                        ))}
-                                        {accessLogs.length === 0 && <p className="text-sm text-muted-foreground">No access logs.</p>}
+                                    <div className="rounded-md border overflow-hidden">
+                                        <Table>
+                                            <TableHeader className="bg-muted/30">
+                                                <TableRow>
+                                                    <TableHead>Status</TableHead>
+                                                    <TableHead>Destination</TableHead>
+                                                    <TableHead className="text-right">Timestamp</TableHead>
+                                                </TableRow>
+                                            </TableHeader>
+                                            <TableBody>
+                                                {accessLogs.slice(0, 15).map((log) => (
+                                                    <TableRow key={log.id}>
+                                                        <TableCell>
+                                                            <Badge variant={log.action === "allowed" ? "default" : "destructive"} className="uppercase text-[10px]">
+                                                                {log.action}
+                                                            </Badge>
+                                                        </TableCell>
+                                                        <TableCell>
+                                                            <div className="font-medium">{log.service?.name || "Direct Connection"}</div>
+                                                            <div className="text-xs text-muted-foreground font-mono">Port {log.port}</div>
+                                                        </TableCell>
+                                                        <TableCell className="text-right text-xs text-muted-foreground font-mono">
+                                                            {new Date(log.created_at).toLocaleString()}
+                                                        </TableCell>
+                                                    </TableRow>
+                                                ))}
+                                                {accessLogs.length === 0 && (
+                                                    <TableRow>
+                                                        <TableCell colSpan={3} className="text-center h-24 text-muted-foreground">
+                                                            No logs found
+                                                        </TableCell>
+                                                    </TableRow>
+                                                )}
+                                            </TableBody>
+                                        </Table>
                                     </div>
                                 </CardContent>
                             </Card>
@@ -779,7 +860,7 @@ export default function AgentDetailPage() {
                     </DialogHeader>
                     <div className="space-y-4">
                         <div className="flex items-center gap-2">
-                            <code className="flex-1 bg-muted p-3 rounded text-sm font-mono break-all">
+                            <code className="flex-1 bg-muted p-3 rounded text-sm font-mono break-all text-primary">
                                 {showKey ? newApiKey : "•".repeat(32)}
                             </code>
                             <Button variant="outline" size="icon" onClick={() => setShowKey(!showKey)}>
