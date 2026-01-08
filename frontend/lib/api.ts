@@ -333,6 +333,16 @@ export async function createPolicy(data: Partial<Policy>): Promise<Policy> {
   return res.json();
 }
 
+export async function updatePolicy(id: number, data: Partial<Policy>): Promise<Policy> {
+  const res = await fetch(`${API_BASE}/api/v1/policies/${id}`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(data),
+  });
+  if (!res.ok) throw new Error('Failed to update policy');
+  return res.json();
+}
+
 export async function deletePolicy(id: number): Promise<void> {
   const res = await fetch(`${API_BASE}/api/v1/policies/${id}`, { method: 'DELETE' });
   if (!res.ok) throw new Error('Failed to delete policy');
