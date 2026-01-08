@@ -6,14 +6,6 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import {
-    Table,
-    TableBody,
-    TableCell,
-    TableHead,
-    TableHeader,
-    TableRow,
-} from "@/components/ui/table";
-import {
     Dialog,
     DialogContent,
     DialogDescription,
@@ -79,6 +71,8 @@ import { toast } from "sonner";
 import Link from "next/link";
 import { cn } from "@/lib/utils";
 import { motion } from "motion/react";
+import { DataTable } from "@/components/ui/data-table";
+import { ColumnDef } from "@tanstack/react-table";
 
 export default function AgentDetailPage() {
     const params = useParams();
@@ -246,6 +240,79 @@ export default function AgentDetailPage() {
         const outbound = policies.filter(p => p.source_group_id === agent.group_id && p.enabled);
         return { inbound, outbound };
     };
+
+    const serviceColumns: ColumnDef<Service>[] = [
+        {
+            accessorKey: "name",
+            header: "Service Name",
+            cell: ({ row }) => (
+                <div>
+                    <div className="font-medium">{row.getValue("name")}</div>
+                    <div className="text-xs text-muted-foreground">{row.original.description}</div>
+                </div>
+            )
+        },
+        {
+            accessorKey: "port",
+            header: "Port/Protocol",
+            cell: ({ row }) => <Badge variant="outline" className="font-mono">{row.getValue("port")}/{row.original.protocol}</Badge>
+        },
+        {
+            id: "test",
+            header: "Test Access",
+            cell: ({ row }) => row.original.protocol === 'tcp' && (
+                <Button
+                    variant="outline"
+                    size="sm"
+                    className="h-8 gap-2"
+                    onClick={() => window.open(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3000'}/api/v1/debug/proxy?ip=${agent?.ip}&port=${row.getValue("port")}`, '_blank')}
+                >
+                    <Globe className="h-3.5 w-3.5" /> Proxy Open
+                </Button>
+            )
+        },
+        {
+            id: "actions",
+            cell: ({ row }) => (
+                <div className="text-right">
+                    <Button variant="ghost" size="icon" onClick={() => handleDeleteService(row.original.id)}>
+                        <Trash2 className="h-4 w-4 text-destructive" />
+                    </Button>
+                </div>
+            )
+        }
+    ];
+
+    const logsColumns: ColumnDef<AccessLog>[] = [
+        {
+            accessorKey: "action",
+            header: "Status",
+            cell: ({ row }) => (
+                <Badge variant={row.getValue("action") === "allowed" ? "default" : "destructive"} className="uppercase text-[10px]">
+                    {row.getValue("action")}
+                </Badge>
+            )
+        },
+        {
+            id: "target",
+            header: "Target",
+            cell: ({ row }) => (
+                <div>
+                    <div className="font-medium">{row.original.service?.name || "Direct"}</div>
+                    <div className="text-xs text-muted-foreground font-mono">Port {row.original.port}</div>
+                </div>
+            )
+        },
+        {
+            accessorKey: "created_at",
+            header: "Time",
+            cell: ({ row }) => (
+                <div className="text-right text-xs text-muted-foreground font-mono">
+                    {new Date(row.getValue("created_at")).toLocaleString()}
+                </div>
+            )
+        }
+    ];
 
     if (loading) {
         return (
@@ -453,51 +520,7 @@ export default function AgentDetailPage() {
 
                         <Card>
                             <CardContent className="p-0">
-                                <Table>
-                                    <TableHeader>
-                                        <TableRow>
-                                            <TableHead>Service Name</TableHead>
-                                            <TableHead>Port/Protocol</TableHead>
-                                            <TableHead>Test Access</TableHead>
-                                            <TableHead className="text-right">Actions</TableHead>
-                                        </TableRow>
-                                    </TableHeader>
-                                    <TableBody>
-                                        {services.map(svc => (
-                                            <TableRow key={svc.id}>
-                                                <TableCell>
-                                                    <div className="font-medium">{svc.name}</div>
-                                                    <div className="text-xs text-muted-foreground">{svc.description}</div>
-                                                </TableCell>
-                                                <TableCell>
-                                                    <Badge variant="outline" className="font-mono">{svc.port}/{svc.protocol}</Badge>
-                                                </TableCell>
-                                                <TableCell>
-                                                    {svc.protocol === 'tcp' && (
-                                                        <Button
-                                                            variant="outline"
-                                                            size="sm"
-                                                            className="h-8 gap-2"
-                                                            onClick={() => window.open(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3000'}/api/v1/debug/proxy?ip=${agent.ip}&port=${svc.port}`, '_blank')}
-                                                        >
-                                                            <Globe className="h-3.5 w-3.5" /> Proxy Open
-                                                        </Button>
-                                                    )}
-                                                </TableCell>
-                                                <TableCell className="text-right">
-                                                    <Button variant="ghost" size="icon" onClick={() => handleDeleteService(svc.id)}>
-                                                        <Trash2 className="h-4 w-4 text-destructive" />
-                                                    </Button>
-                                                </TableCell>
-                                            </TableRow>
-                                        ))}
-                                        {services.length === 0 && (
-                                            <TableRow>
-                                                <TableCell colSpan={4} className="text-center h-24 text-muted-foreground">No services configured</TableCell>
-                                            </TableRow>
-                                        )}
-                                    </TableBody>
-                                </Table>
+                                <DataTable columns={serviceColumns} data={services} filterPlaceholder="Filter services..." filterColumn="name" />
                             </CardContent>
                         </Card>
                     </motion.div>
@@ -582,33 +605,7 @@ export default function AgentDetailPage() {
                     <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}>
                         <Card>
                             <CardContent className="p-0">
-                                <Table>
-                                    <TableHeader>
-                                        <TableRow>
-                                            <TableHead>Status</TableHead>
-                                            <TableHead>Target</TableHead>
-                                            <TableHead className="text-right">Time</TableHead>
-                                        </TableRow>
-                                    </TableHeader>
-                                    <TableBody>
-                                        {accessLogs.slice(0, 20).map(log => (
-                                            <TableRow key={log.id}>
-                                                <TableCell>
-                                                    <Badge variant={log.action === "allowed" ? "default" : "destructive"} className="uppercase text-[10px]">
-                                                        {log.action}
-                                                    </Badge>
-                                                </TableCell>
-                                                <TableCell>
-                                                    <div className="font-medium">{log.service?.name || "Direct"}</div>
-                                                    <div className="text-xs text-muted-foreground font-mono">Port {log.port}</div>
-                                                </TableCell>
-                                                <TableCell className="text-right text-xs text-muted-foreground font-mono">
-                                                    {new Date(log.created_at).toLocaleString()}
-                                                </TableCell>
-                                            </TableRow>
-                                        ))}
-                                    </TableBody>
-                                </Table>
+                                <DataTable columns={logsColumns} data={accessLogs} />
                             </CardContent>
                         </Card>
                     </motion.div>

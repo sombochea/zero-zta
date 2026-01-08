@@ -5,14 +5,6 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import {
-    Table,
-    TableBody,
-    TableCell,
-    TableHead,
-    TableHeader,
-    TableRow,
-} from "@/components/ui/table";
-import {
     Dialog,
     DialogContent,
     DialogDescription,
@@ -33,6 +25,8 @@ import {
 import { getPolicies, createPolicy, updatePolicy, deletePolicy, getGroups, getAgents, Policy, Group, Agent } from "@/lib/api";
 import { Plus, Trash2, ArrowRight, Edit, Shield, ShieldCheck, ShieldX, Users } from "lucide-react";
 import { toast } from "sonner";
+import { DataTable } from "@/components/ui/data-table";
+import { ColumnDef } from "@tanstack/react-table";
 
 export default function PoliciesPage() {
     const [policies, setPolicies] = useState<Policy[]>([]);
@@ -153,6 +147,95 @@ export default function PoliciesPage() {
             toast.error("Failed to update policy");
         }
     };
+
+    const columns: ColumnDef<Policy>[] = [
+        {
+            accessorKey: "name",
+            header: "Name",
+            cell: ({ row }) => (
+                <div>
+                    <p className="font-medium">{row.getValue("name")}</p>
+                    {row.original.description && (
+                        <p className="text-xs text-muted-foreground truncate max-w-[200px]">
+                            {row.original.description}
+                        </p>
+                    )}
+                </div>
+            )
+        },
+        {
+            id: "rule",
+            header: "Rule",
+            cell: ({ row }) => (
+                <div className="flex items-center gap-2">
+                    <Badge variant="outline" className="font-normal">
+                        {row.original.source_group?.name || "Unknown"}
+                    </Badge>
+                    <ArrowRight className="h-4 w-4 text-muted-foreground" />
+                    <Badge variant="outline" className="font-normal">
+                        {row.original.dest_group?.name || "Unknown"}
+                    </Badge>
+                </div>
+            )
+        },
+        {
+            accessorKey: "allowed_ports",
+            header: "Ports",
+            cell: ({ row }) => (
+                <code className="text-xs bg-muted px-2 py-1 rounded">
+                    {row.getValue("allowed_ports")}
+                </code>
+            )
+        },
+        {
+            accessorKey: "action",
+            header: "Action",
+            cell: ({ row }) => {
+                const action = row.getValue("action") as string;
+                return (
+                    <Badge variant={action === "allow" ? "default" : "destructive"}>
+                        {action === "allow" ? (
+                            <ShieldCheck className="h-3 w-3 mr-1" />
+                        ) : (
+                            <ShieldX className="h-3 w-3 mr-1" />
+                        )}
+                        {action}
+                    </Badge>
+                );
+            }
+        },
+        {
+            accessorKey: "enabled",
+            header: "Status",
+            cell: ({ row }) => (
+                <Switch
+                    checked={row.original.enabled}
+                    onCheckedChange={() => togglePolicyEnabled(row.original)}
+                />
+            )
+        },
+        {
+            id: "actions",
+            cell: ({ row }) => (
+                <div className="flex justify-end gap-2">
+                    <Button
+                        variant="ghost"
+                        size="icon"
+                        onClick={() => openEditDialog(row.original)}
+                    >
+                        <Edit className="h-4 w-4" />
+                    </Button>
+                    <Button
+                        variant="ghost"
+                        size="icon"
+                        onClick={() => handleDelete(row.original.id)}
+                    >
+                        <Trash2 className="h-4 w-4 text-destructive" />
+                    </Button>
+                </div>
+            )
+        }
+    ];
 
     if (loading) {
         return (
@@ -338,93 +421,7 @@ export default function PoliciesPage() {
                     </CardDescription>
                 </CardHeader>
                 <CardContent>
-                    {policies.length === 0 ? (
-                        <div className="text-center py-12">
-                            <Shield className="h-12 w-12 mx-auto text-muted-foreground/50 mb-4" />
-                            <p className="text-muted-foreground">
-                                No policies created yet. Create groups first, then add policies.
-                            </p>
-                        </div>
-                    ) : (
-                        <Table>
-                            <TableHeader>
-                                <TableRow>
-                                    <TableHead>Name</TableHead>
-                                    <TableHead>Rule</TableHead>
-                                    <TableHead>Ports</TableHead>
-                                    <TableHead>Action</TableHead>
-                                    <TableHead>Status</TableHead>
-                                    <TableHead className="text-right">Actions</TableHead>
-                                </TableRow>
-                            </TableHeader>
-                            <TableBody>
-                                {policies.map((policy) => (
-                                    <TableRow key={policy.id} className={!policy.enabled ? "opacity-50" : ""}>
-                                        <TableCell>
-                                            <div>
-                                                <p className="font-medium">{policy.name}</p>
-                                                {policy.description && (
-                                                    <p className="text-xs text-muted-foreground truncate max-w-[200px]">
-                                                        {policy.description}
-                                                    </p>
-                                                )}
-                                            </div>
-                                        </TableCell>
-                                        <TableCell>
-                                            <div className="flex items-center gap-2">
-                                                <Badge variant="outline" className="font-normal">
-                                                    {policy.source_group?.name || "Unknown"}
-                                                </Badge>
-                                                <ArrowRight className="h-4 w-4 text-muted-foreground" />
-                                                <Badge variant="outline" className="font-normal">
-                                                    {policy.dest_group?.name || "Unknown"}
-                                                </Badge>
-                                            </div>
-                                        </TableCell>
-                                        <TableCell>
-                                            <code className="text-xs bg-muted px-2 py-1 rounded">
-                                                {policy.allowed_ports}
-                                            </code>
-                                        </TableCell>
-                                        <TableCell>
-                                            <Badge variant={policy.action === "allow" ? "default" : "destructive"}>
-                                                {policy.action === "allow" ? (
-                                                    <ShieldCheck className="h-3 w-3 mr-1" />
-                                                ) : (
-                                                    <ShieldX className="h-3 w-3 mr-1" />
-                                                )}
-                                                {policy.action}
-                                            </Badge>
-                                        </TableCell>
-                                        <TableCell>
-                                            <Switch
-                                                checked={policy.enabled}
-                                                onCheckedChange={() => togglePolicyEnabled(policy)}
-                                            />
-                                        </TableCell>
-                                        <TableCell className="text-right">
-                                            <div className="flex justify-end gap-2">
-                                                <Button
-                                                    variant="ghost"
-                                                    size="icon"
-                                                    onClick={() => openEditDialog(policy)}
-                                                >
-                                                    <Edit className="h-4 w-4" />
-                                                </Button>
-                                                <Button
-                                                    variant="ghost"
-                                                    size="icon"
-                                                    onClick={() => handleDelete(policy.id)}
-                                                >
-                                                    <Trash2 className="h-4 w-4 text-destructive" />
-                                                </Button>
-                                            </div>
-                                        </TableCell>
-                                    </TableRow>
-                                ))}
-                            </TableBody>
-                        </Table>
-                    )}
+                    <DataTable columns={columns} data={policies} filterPlaceholder="Filter policies..." filterColumn="name" />
                 </CardContent>
             </Card>
 

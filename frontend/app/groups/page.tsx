@@ -4,14 +4,6 @@ import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import {
-    Table,
-    TableBody,
-    TableCell,
-    TableHead,
-    TableHeader,
-    TableRow,
-} from "@/components/ui/table";
-import {
     Dialog,
     DialogContent,
     DialogDescription,
@@ -27,6 +19,8 @@ import { Plus, Trash2, Users, Edit, Search } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import Link from "next/link";
 import { toast } from "sonner";
+import { DataTable } from "@/components/ui/data-table";
+import { ColumnDef } from "@tanstack/react-table";
 
 export default function GroupsPage() {
     const [groups, setGroups] = useState<Group[]>([]);
@@ -109,6 +103,62 @@ export default function GroupsPage() {
         setViewAgentsOpen(true);
     }
 
+    const columns: ColumnDef<Group>[] = [
+        {
+            accessorKey: "name",
+            header: "Name",
+            cell: ({ row }) => <span className="font-medium">{row.getValue("name")}</span>,
+        },
+        {
+            accessorKey: "description",
+            header: "Description",
+            cell: ({ row }) => {
+                const description = row.getValue("description") as string;
+                return description || <span className="text-muted-foreground">—</span>;
+            },
+        },
+        {
+            accessorKey: "agents",
+            header: "Agents",
+            cell: ({ row }) => (
+                <Button variant="ghost" size="sm" className="h-8 gap-2" onClick={() => openViewAgents(row.original)}>
+                    <Users className="h-4 w-4 text-muted-foreground" />
+                    <span>{row.original.agents?.length || 0}</span>
+                </Button>
+            ),
+        },
+        {
+            accessorKey: "created_at",
+            header: "Created",
+            cell: ({ row }) => (
+                <span className="text-muted-foreground text-sm">
+                    {new Date(row.getValue("created_at")).toLocaleDateString()}
+                </span>
+            ),
+        },
+        {
+            id: "actions",
+            cell: ({ row }) => (
+                <div className="flex justify-end gap-2">
+                    <Button
+                        variant="ghost"
+                        size="icon"
+                        onClick={() => openEdit(row.original)}
+                    >
+                        <Edit className="h-4 w-4 text-muted-foreground" />
+                    </Button>
+                    <Button
+                        variant="ghost"
+                        size="icon"
+                        onClick={() => handleDelete(row.original.id)}
+                    >
+                        <Trash2 className="h-4 w-4 text-destructive" />
+                    </Button>
+                </div>
+            ),
+        },
+    ];
+
     if (loading) {
         return (
             <div className="flex items-center justify-center h-64">
@@ -140,60 +190,7 @@ export default function GroupsPage() {
                     </CardDescription>
                 </CardHeader>
                 <CardContent>
-                    {groups.length === 0 ? (
-                        <p className="text-muted-foreground text-center py-8">
-                            No groups created yet. Click "New Group" to create one.
-                        </p>
-                    ) : (
-                        <Table>
-                            <TableHeader>
-                                <TableRow>
-                                    <TableHead>Name</TableHead>
-                                    <TableHead>Description</TableHead>
-                                    <TableHead>Agents</TableHead>
-                                    <TableHead>Created</TableHead>
-                                    <TableHead className="text-right">Actions</TableHead>
-                                </TableRow>
-                            </TableHeader>
-                            <TableBody>
-                                {groups.map((group) => (
-                                    <TableRow key={group.id}>
-                                        <TableCell className="font-medium">{group.name}</TableCell>
-                                        <TableCell>
-                                            {group.description || <span className="text-muted-foreground">—</span>}
-                                        </TableCell>
-                                        <TableCell>
-                                            <Button variant="ghost" size="sm" className="h-8 gap-2" onClick={() => openViewAgents(group)}>
-                                                <Users className="h-4 w-4 text-muted-foreground" />
-                                                <span>{group.agents?.length || 0}</span>
-                                            </Button>
-                                        </TableCell>
-                                        <TableCell>
-                                            {new Date(group.created_at).toLocaleDateString()}
-                                        </TableCell>
-                                        <TableCell className="text-right">
-                                            <div className="flex justify-end gap-2">
-                                                <Button
-                                                    variant="ghost"
-                                                    size="icon"
-                                                    onClick={() => openEdit(group)}
-                                                >
-                                                    <Edit className="h-4 w-4 text-muted-foreground" />
-                                                </Button>
-                                                <Button
-                                                    variant="ghost"
-                                                    size="icon"
-                                                    onClick={() => handleDelete(group.id)}
-                                                >
-                                                    <Trash2 className="h-4 w-4 text-destructive" />
-                                                </Button>
-                                            </div>
-                                        </TableCell>
-                                    </TableRow>
-                                ))}
-                            </TableBody>
-                        </Table>
-                    )}
+                    <DataTable columns={columns} data={groups} filterColumn="name" filterPlaceholder="Filter groups..." />
                 </CardContent>
             </Card>
 

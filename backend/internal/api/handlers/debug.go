@@ -6,6 +6,7 @@ import (
 	"io"
 	"net"
 	"net/http"
+	"net/url"
 	"time"
 
 	"github.com/cubetiq/zero-zta/backend/internal/db"
@@ -179,14 +180,49 @@ func HTTPCheck(c fiber.Ctx) error {
 		return c.Status(503).JSON(fiber.Map{"error": "VPN network not initialized"})
 	}
 
-	// Create a custom HTTP client that uses the VPN Dialer
-	client := &http.Client{
-		Transport: &http.Transport{
-			DialContext: func(ctx context.Context, network, addr string) (net.Conn, error) {
-				return service.VPNNet.DialContext(ctx, network, addr)
+	// Determine if target is a VPN IP
+	host, _, err := net.SplitHostPort(req.URL)
+	if err != nil {
+		// Attempt to parse as just host if URL parsing fails or no port (URL might be "http://google.com")
+		if u, err := url.Parse(req.URL); err == nil && u.Host != "" {
+			host = u.Hostname()
+		} else {
+			host = req.URL
+		}
+	}
+
+	// Resolve to IP to check if it's internal
+	var useSystemDialer bool = true
+	ips, err := net.LookupHost(host)
+	if err == nil {
+		for _, ip := range ips {
+			// Check if 10.0.0.x (Simple check for now)
+			if net.ParseIP(ip).To4() != nil && ip[:4] == "10.0" {
+				useSystemDialer = false
+				break
+			}
+		}
+	} else {
+		// If resolution fails, let the client try, but assume system if it looks like a domain not in our VPN
+		// For simplicity, if service.VPNNet is nil, we always use system
+	}
+
+	// Create client
+	var client *http.Client
+
+	if !useSystemDialer && service.VPNNet != nil {
+		client = &http.Client{
+			Transport: &http.Transport{
+				DialContext: func(ctx context.Context, network, addr string) (net.Conn, error) {
+					return service.VPNNet.DialContext(ctx, network, addr)
+				},
 			},
-		},
-		Timeout: 5 * time.Second,
+			Timeout: 10 * time.Second,
+		}
+	} else {
+		client = &http.Client{
+			Timeout: 10 * time.Second,
+		}
 	}
 
 	httpReq, err := http.NewRequest(req.Method, req.URL, nil)
@@ -197,7 +233,6 @@ func HTTPCheck(c fiber.Ctx) error {
 		})
 	}
 
-	// Set User-Agent
 	httpReq.Header.Set("User-Agent", "ZeroZTA-Diagnostics/1.0")
 
 	start := time.Now()
@@ -230,6 +265,7 @@ func HTTPCheck(c fiber.Ctx) error {
 		"status_text": resp.Status,
 		"duration_ms": duration,
 		"headers":     headers,
+		"used_vpn":    !useSystemDialer,
 	})
 }
 

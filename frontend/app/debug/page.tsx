@@ -66,7 +66,7 @@ export default function DebugToolsPage() {
     const [consoleOutput, setConsoleOutput] = useState<ConsoleEntry[]>([]);
     const [port, setPort] = useState("80");
     const [domain, setDomain] = useState("google.com");
-    const [url, setUrl] = useState("http://example.com");
+    const [url, setUrl] = useState("https://google.com");
     const [running, setRunning] = useState(false);
 
     useEffect(() => {
@@ -320,6 +320,11 @@ export default function DebugToolsPage() {
                         <span className="text-muted-foreground flex items-center gap-1">
                             <Clock className="h-3 w-3" /> {data.duration_ms}ms
                         </span>
+                        {data.used_vpn !== undefined && (
+                            <span className={cn("text-xs px-1.5 py-0.5 rounded border", data.used_vpn ? "bg-blue-500/10 text-blue-500 border-blue-200" : "bg-zinc-500/10 text-zinc-500 border-zinc-200")}>
+                                {data.used_vpn ? "Via VPN" : "Via Internet"}
+                            </span>
+                        )}
                     </div>
                 </div>
             );
@@ -476,7 +481,7 @@ export default function DebugToolsPage() {
                                         <Input
                                             value={url}
                                             onChange={(e) => setUrl(e.target.value)}
-                                            placeholder="http://example.com"
+                                            placeholder="https://google.com"
                                         />
                                     </div>
                                 </TabsContent>

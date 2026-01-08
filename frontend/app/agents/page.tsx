@@ -5,14 +5,6 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import {
-    Table,
-    TableBody,
-    TableCell,
-    TableHead,
-    TableHeader,
-    TableRow,
-} from "@/components/ui/table";
-import {
     Dialog,
     DialogContent,
     DialogDescription,
@@ -24,9 +16,11 @@ import {
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
 import { getAgents, createAgent, deleteAgent, Agent } from "@/lib/api";
-import { Plus, Trash2, Copy, Eye, EyeOff, ExternalLink, Server } from "lucide-react";
+import { Plus, Trash2, Copy, Eye, EyeOff, ExternalLink, Server, ArrowUpDown } from "lucide-react";
 import { toast } from "sonner";
 import Link from "next/link";
+import { DataTable } from "@/components/ui/data-table";
+import { ColumnDef } from "@tanstack/react-table";
 
 export default function AgentsPage() {
     const [agents, setAgents] = useState<Agent[]>([]);
@@ -81,6 +75,85 @@ export default function AgentsPage() {
         navigator.clipboard.writeText(text);
         toast.success("Copied to clipboard");
     };
+
+    const columns: ColumnDef<Agent>[] = [
+        {
+            accessorKey: "name",
+            header: ({ column }) => {
+                return (
+                    <Button
+                        variant="ghost"
+                        onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}
+                    >
+                        Name
+                        <ArrowUpDown className="ml-2 h-4 w-4" />
+                    </Button>
+                )
+            },
+            cell: ({ row }) => (
+                <Link href={`/agents/${row.original.id}`} className="font-medium hover:underline flex items-center gap-2">
+                    {row.getValue("name")}
+                    <ExternalLink className="h-3 w-3 opacity-0 group-hover:opacity-100 transition-opacity" />
+                </Link>
+            ),
+        },
+        {
+            accessorKey: "ip",
+            header: "IP Address",
+            cell: ({ row }) => <span className="font-mono text-sm">{row.getValue("ip")}</span>,
+        },
+        {
+            accessorKey: "status",
+            header: "Status",
+            cell: ({ row }) => {
+                const status = row.getValue("status") as string;
+                return (
+                    <Badge
+                        variant={status === 'online' ? 'default' : 'secondary'}
+                        className={status === 'online' ? 'bg-green-500/10 text-green-600 border-green-500/20' : ''}
+                    >
+                        <span className={`mr-1.5 h-1.5 w-1.5 rounded-full ${status === 'online' ? 'bg-green-500' : 'bg-gray-400'}`} />
+                        {status}
+                    </Badge>
+                );
+            },
+        },
+        {
+            accessorKey: "group.name",
+            header: "Group",
+            cell: ({ row }) => {
+                const groupName = row.original.group?.name;
+                return groupName ? <Badge variant="outline">{groupName}</Badge> : <span className="text-muted-foreground">—</span>;
+            },
+        },
+        {
+            accessorKey: "last_seen",
+            header: "Last Seen",
+            cell: ({ row }) => {
+                const lastSeen = row.getValue("last_seen") as string;
+                return <span className="text-muted-foreground text-sm">{lastSeen ? new Date(lastSeen).toLocaleString() : "Never"}</span>;
+            },
+        },
+        {
+            id: "actions",
+            cell: ({ row }) => (
+                <div className="flex items-center justify-end gap-1">
+                    <Button variant="ghost" size="icon" asChild>
+                        <Link href={`/agents/${row.original.id}`}>
+                            <ExternalLink className="h-4 w-4" />
+                        </Link>
+                    </Button>
+                    <Button
+                        variant="ghost"
+                        size="icon"
+                        onClick={() => handleDelete(row.original.id)}
+                    >
+                        <Trash2 className="h-4 w-4 text-destructive" />
+                    </Button>
+                </div>
+            ),
+        },
+    ];
 
     if (loading) {
         return (
@@ -187,80 +260,7 @@ export default function AgentsPage() {
                     </CardDescription>
                 </CardHeader>
                 <CardContent>
-                    {agents.length === 0 ? (
-                        <div className="text-center py-12">
-                            <Server className="h-12 w-12 mx-auto text-muted-foreground/50" />
-                            <p className="mt-4 text-muted-foreground">
-                                No agents registered yet. Click "New Agent" to create one.
-                            </p>
-                        </div>
-                    ) : (
-                        <div className="overflow-x-auto">
-                            <Table>
-                                <TableHeader>
-                                    <TableRow>
-                                        <TableHead>Name</TableHead>
-                                        <TableHead>IP Address</TableHead>
-                                        <TableHead>Status</TableHead>
-                                        <TableHead className="hidden md:table-cell">Group</TableHead>
-                                        <TableHead className="hidden lg:table-cell">Last Seen</TableHead>
-                                        <TableHead className="text-right">Actions</TableHead>
-                                    </TableRow>
-                                </TableHeader>
-                                <TableBody>
-                                    {agents.map((agent) => (
-                                        <TableRow key={agent.id} className="group">
-                                            <TableCell>
-                                                <Link href={`/agents/${agent.id}`} className="font-medium hover:underline flex items-center gap-2">
-                                                    {agent.name}
-                                                    <ExternalLink className="h-3 w-3 opacity-0 group-hover:opacity-100 transition-opacity" />
-                                                </Link>
-                                            </TableCell>
-                                            <TableCell className="font-mono text-sm">{agent.ip}</TableCell>
-                                            <TableCell>
-                                                <Badge
-                                                    variant={agent.status === 'online' ? 'default' : 'secondary'}
-                                                    className={agent.status === 'online' ? 'bg-green-500/10 text-green-600 border-green-500/20' : ''}
-                                                >
-                                                    <span className={`mr-1.5 h-1.5 w-1.5 rounded-full ${agent.status === 'online' ? 'bg-green-500' : 'bg-gray-400'}`} />
-                                                    {agent.status}
-                                                </Badge>
-                                            </TableCell>
-                                            <TableCell className="hidden md:table-cell">
-                                                {agent.group ? (
-                                                    <Badge variant="outline">{agent.group.name}</Badge>
-                                                ) : (
-                                                    <span className="text-muted-foreground">—</span>
-                                                )}
-                                            </TableCell>
-                                            <TableCell className="hidden lg:table-cell text-muted-foreground text-sm">
-                                                {agent.last_seen
-                                                    ? new Date(agent.last_seen).toLocaleString()
-                                                    : "Never"
-                                                }
-                                            </TableCell>
-                                            <TableCell className="text-right">
-                                                <div className="flex items-center justify-end gap-1">
-                                                    <Button variant="ghost" size="icon" asChild>
-                                                        <Link href={`/agents/${agent.id}`}>
-                                                            <ExternalLink className="h-4 w-4" />
-                                                        </Link>
-                                                    </Button>
-                                                    <Button
-                                                        variant="ghost"
-                                                        size="icon"
-                                                        onClick={() => handleDelete(agent.id)}
-                                                    >
-                                                        <Trash2 className="h-4 w-4 text-destructive" />
-                                                    </Button>
-                                                </div>
-                                            </TableCell>
-                                        </TableRow>
-                                    ))}
-                                </TableBody>
-                            </Table>
-                        </div>
-                    )}
+                    <DataTable columns={columns} data={agents} filterColumn="name" filterPlaceholder="Filter agents..." />
                 </CardContent>
             </Card>
         </div>

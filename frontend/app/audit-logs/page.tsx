@@ -4,11 +4,12 @@ import { useEffect, useState } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Input } from "@/components/ui/input";
 import { getAuditLogs, AuditLog } from "@/lib/api";
-import { Activity, Search } from "lucide-react";
+import { Activity } from "lucide-react";
 import { toast } from "sonner";
 import Link from "next/link";
+import { DataTable } from "@/components/ui/data-table";
+import { ColumnDef } from "@tanstack/react-table";
 
 const actionColors: Record<string, string> = {
     connected: "bg-green-500/10 text-green-600 border-green-500/20",
@@ -22,7 +23,6 @@ const actionColors: Record<string, string> = {
 export default function AuditLogsPage() {
     const [logs, setLogs] = useState<AuditLog[]>([]);
     const [loading, setLoading] = useState(true);
-    const [search, setSearch] = useState("");
 
     const fetchLogs = async () => {
         try {
@@ -39,11 +39,62 @@ export default function AuditLogsPage() {
         fetchLogs();
     }, []);
 
-    const filteredLogs = logs.filter(log =>
-        log.action.toLowerCase().includes(search.toLowerCase()) ||
-        log.details.toLowerCase().includes(search.toLowerCase()) ||
-        log.agent?.name?.toLowerCase().includes(search.toLowerCase())
-    );
+    const columns: ColumnDef<AuditLog>[] = [
+        {
+            accessorKey: "agent.name",
+            header: "Agent",
+            cell: ({ row }) => row.original.agent ? (
+                <Link href={`/agents/${row.original.agent_id}`} className="font-medium hover:underline flex items-center gap-2">
+                    <div className="h-6 w-6 rounded-full bg-muted flex items-center justify-center">
+                        <Activity className="h-3 w-3 text-muted-foreground" />
+                    </div>
+                    {row.original.agent.name}
+                </Link>
+            ) : <span className="text-muted-foreground flex items-center gap-2"><div className="h-6 w-6 rounded-full bg-muted flex items-center justify-center"><Activity className="h-3 w-3 text-muted-foreground" /></div>System</span>,
+        },
+        {
+            accessorKey: "action",
+            header: "Action",
+            cell: ({ row }) => (
+                <Badge
+                    variant="outline"
+                    className={actionColors[row.getValue("action") as string] || ""}
+                >
+                    {(row.getValue("action") as string).replace(/_/g, ' ')}
+                </Badge>
+            ),
+        },
+        {
+            accessorKey: "details",
+            header: "Details",
+            cell: ({ row }) => {
+                let details: Record<string, any> = {};
+                try {
+                    details = JSON.parse(row.getValue("details"));
+                } catch { }
+
+                if (Object.keys(details).length === 0) return <span className="text-muted-foreground">—</span>;
+
+                return (
+                    <div className="text-xs text-muted-foreground space-x-2">
+                        {Object.entries(details).slice(0, 3).map(([key, value]) => (
+                            <span key={key} className="inline-flex items-center bg-muted/50 px-1.5 py-0.5 rounded">
+                                <span className="font-semibold mr-1">{key}:</span>
+                                <span className="font-mono max-w-[150px] truncate">
+                                    {typeof value === 'object' ? JSON.stringify(value) : String(value)}
+                                </span>
+                            </span>
+                        ))}
+                    </div>
+                );
+            },
+        },
+        {
+            accessorKey: "created_at",
+            header: "Time",
+            cell: ({ row }) => <span className="text-xs text-muted-foreground whitespace-nowrap">{new Date(row.getValue("created_at")).toLocaleString()}</span>,
+        },
+    ];
 
     if (loading) {
         return (
@@ -64,87 +115,12 @@ export default function AuditLogsPage() {
             </div>
 
             <Card>
-                <CardHeader className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-                    <div>
-                        <CardTitle>All Activity</CardTitle>
-                        <CardDescription>{logs.length} events recorded</CardDescription>
-                    </div>
-                    <div className="relative w-full sm:w-64">
-                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                        <Input
-                            placeholder="Search logs..."
-                            value={search}
-                            onChange={(e) => setSearch(e.target.value)}
-                            className="pl-9"
-                        />
-                    </div>
+                <CardHeader>
+                    <CardTitle>All Activity</CardTitle>
+                    <CardDescription>{logs.length} events recorded</CardDescription>
                 </CardHeader>
                 <CardContent>
-                    {filteredLogs.length === 0 ? (
-                        <div className="text-center py-12">
-                            <Activity className="h-12 w-12 mx-auto text-muted-foreground/50" />
-                            <p className="mt-4 text-muted-foreground">
-                                {search ? "No matching logs found" : "No activity recorded yet"}
-                            </p>
-                        </div>
-                    ) : (
-                        <div className="space-y-3">
-                            {filteredLogs.map((log) => {
-                                let details: Record<string, any> = {};
-                                try {
-                                    details = JSON.parse(log.details);
-                                } catch { }
-
-                                return (
-                                    <div key={log.id} className="flex flex-col sm:flex-row sm:items-start gap-4 p-4 bg-muted/30 rounded-xl border border-transparent hover:border-muted-foreground/10 transition-colors">
-                                        <div className="flex items-center gap-3 sm:w-48 flex-shrink-0">
-                                            <div className="h-8 w-8 rounded-full bg-muted flex items-center justify-center">
-                                                <Activity className="h-4 w-4 text-muted-foreground" />
-                                            </div>
-                                            <div className="flex-1 min-w-0">
-                                                {log.agent ? (
-                                                    <Link href={`/agents/${log.agent_id}`} className="font-medium hover:underline truncate block">
-                                                        {log.agent.name}
-                                                    </Link>
-                                                ) : (
-                                                    <span className="text-muted-foreground">System</span>
-                                                )}
-                                                <p className="text-xs text-muted-foreground">
-                                                    {new Date(log.created_at).toLocaleString()}
-                                                </p>
-                                            </div>
-                                        </div>
-
-                                        <div className="flex-1 min-w-0">
-                                            <Badge
-                                                variant="outline"
-                                                className={actionColors[log.action] || ""}
-                                            >
-                                                {log.action.replace(/_/g, ' ')}
-                                            </Badge>
-
-                                            {Object.keys(details).length > 0 && (
-                                                <div className="mt-2 text-sm text-muted-foreground">
-                                                    {Object.entries(details).map(([key, value]) => (
-                                                        <span key={key} className="mr-4">
-                                                            <span className="font-medium">{key}:</span>{' '}
-                                                            <span className="font-mono text-xs">
-                                                                {typeof value === 'object' ? JSON.stringify(value) : String(value)}
-                                                            </span>
-                                                        </span>
-                                                    ))}
-                                                </div>
-                                            )}
-                                        </div>
-
-                                        <div className="text-xs text-muted-foreground text-right hidden lg:block">
-                                            {log.ip_address && <p>{log.ip_address}</p>}
-                                        </div>
-                                    </div>
-                                );
-                            })}
-                        </div>
-                    )}
+                    <DataTable columns={columns} data={logs} filterColumn="agent.name" filterPlaceholder="Filter by agent..." />
                 </CardContent>
             </Card>
         </div>
