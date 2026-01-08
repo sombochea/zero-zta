@@ -14,7 +14,9 @@ import (
 	"net/netip"
 	"os"
 	"os/signal"
+	"runtime"
 	"syscall"
+	"time"
 
 	"golang.org/x/crypto/curve25519"
 
@@ -25,6 +27,7 @@ import (
 
 func main() {
 	apiKey := flag.String("key", "", "API Key for authentication")
+	serverURL := flag.String("server", "http://127.0.0.1:3000", "Control Server URL")
 	flag.Parse()
 
 	if *apiKey == "" {
@@ -34,80 +37,87 @@ func main() {
 	interfaceName := "wg0"
 	fmt.Printf("Starting Zero ZTA Agent on interface %s...\n", interfaceName)
 
-	// Generate Ephemeral Private Key
+	// Generate Ephemeral Private Key (once per session, or rotate on reconnect? let's keep it for now)
 	privKey, pubKey := generateKeyPair()
 	log.Printf("Agent Public Key: %s", pubKey)
 
+	// Wait for interrupt signal to cleanup
+	c := make(chan os.Signal, 1)
+	signal.Notify(c, os.Interrupt, syscall.SIGTERM)
+
+	// Main Agent Loop
+	for {
+		log.Printf("Connecting to %s...", *serverURL)
+		err := runAgent(*serverURL, *apiKey, privKey, pubKey, interfaceName, c)
+		if err != nil {
+			log.Printf("Agent disconnected or failed: %v", err)
+		}
+
+		select {
+		case <-c:
+			log.Println("Shutting down agent...")
+			return
+		case <-time.After(5 * time.Second):
+			log.Println("Reconnecting in 5 seconds...")
+			continue
+		}
+	}
+}
+
+func runAgent(serverURL, apiKey, privKey, pubKey, interfaceName string, sigChan chan os.Signal) error {
 	// Connect to control server to get VPN config
-	vpnConfig, err := connectToServer("http://127.0.0.1:3000", *apiKey, pubKey)
+	vpnConfig, err := connectToServer(serverURL, apiKey, pubKey)
 	if err != nil {
-		log.Fatalf("Failed to authenticate/connect: %v", err)
+		return fmt.Errorf("connect failed: %v", err)
 	}
 
-	log.Printf("Received VPN Config: Endpoint=%s, PeerPubKey=%s, AssignedIP=%s",
-		vpnConfig.Endpoint, vpnConfig.ServerPubKey, vpnConfig.AssignedIP)
+	log.Printf("Received VPN Config: Endpoint=%s, AssignedIP=%s", vpnConfig.Endpoint, vpnConfig.AssignedIP)
 
-	// create userspace TUN device via netstack
-	// Setup IP addresses for the virtual interface
-	// Protocol usually sends CIDR or just IP. Our server sends IP/32. netip.ParseAddr is strict.
-	// Let's parse prefix if needed or assume format.
-	// Actually netip.ParseAddr expects just IP.
-	// We need to strip CIDR if present.
-
-	// Better: Use ParsePrefix then Addr()
+	// Parse IP
 	prefix, err := netip.ParsePrefix(vpnConfig.AssignedIP)
 	if err != nil {
-		// Try parsing as Addr
-		// log.Panicf("failed to parse IP: %v", err)
+		return fmt.Errorf("failed to parse IP %s: %v", vpnConfig.AssignedIP, err)
 	}
-
-	// Let's simplify and just handle what server sends.
-	// Server sends "10.0.0.x/32".
-
 	tunAddr := prefix.Addr()
 
+	// Create userspace TUN
 	tun, tnet, err := netstack.CreateNetTUN(
 		[]netip.Addr{tunAddr},
 		[]netip.Addr{netip.MustParseAddr("8.8.8.8")},
 		device.DefaultMTU,
 	)
 	if err != nil {
-		log.Panicf("failed to create netstack TUN: %v", err)
+		return fmt.Errorf("failed to create TUN: %v", err)
 	}
 
-	// open logging
-	logger := device.NewLogger(
-		device.LogLevelVerbose,
-		fmt.Sprintf("(%s) ", interfaceName),
-	)
+	// Logging
+	logger := device.NewLogger(device.LogLevelError, fmt.Sprintf("(%s) ", interfaceName))
 
-	// Start Internal Service on Agent VPN Interface
+	// Start Internal Service
+	// We need a done channel to stop this goroutine if runAgent returns
+	// But netstack ListenTCP listeners are closed when tnet is gone?
+	// Actually tnet isn't closed explicitly, but the device close might help.
 	go func() {
-		tcpAddr, err := net.ResolveTCPAddr("tcp", ":80")
-		if err != nil {
-			logger.Errorf("Failed to resolve address: %v", err)
-			return
-		}
-
+		tcpAddr, _ := net.ResolveTCPAddr("tcp", ":80")
 		listener, err := tnet.ListenTCP(tcpAddr)
 		if err != nil {
-			logger.Errorf("Failed to listen on VPN port 80: %v", err)
+			log.Printf("Failed to listen on internal port 80: %v", err)
 			return
 		}
+		defer listener.Close()
 
 		mux := http.NewServeMux()
 		mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 			w.Header().Set("Content-Type", "application/json")
-			fmt.Fprintf(w, `{"message": "Hello from Agent", "ip": "%s"}`, vpnConfig.AssignedIP)
+			fmt.Fprintf(w, `{"message": "Hello from Agent", "ip": "%s", "time": "%s"}`, vpnConfig.AssignedIP, time.Now().Format(time.RFC3339))
 		})
 
-		logger.Verbosef("Internal service started on VPN port 80")
-		if err := http.Serve(listener, mux); err != nil {
-			logger.Errorf("Internal service error: %v", err)
-		}
+		http.Serve(listener, mux)
 	}()
 
-	// Construct UAPI config
+	// WireGuard Device
+	dev := device.NewDevice(tun, conn.NewDefaultBind(), logger)
+
 	uapiConfig := fmt.Sprintf(`private_key=%s
 public_key=%s
 allowed_ip=%s
@@ -120,70 +130,77 @@ persistent_keepalive_interval=25
 		vpnConfig.Endpoint,
 	)
 
-	// open logging (Moved up)
-
-	// Create device (using default bind for agent to start ephemeral port)
-	// Actually, netstack.CreateNetTUN returns a tun device that we pass to NewDevice.
-	// But NewDevice ALSO needs a Bind.
-	// For netstack, we usually use a bind that works with usage.
-	// conn.NewDefaultBind() works for standard UDP sockets.
-	dev := device.NewDevice(tun, conn.NewDefaultBind(), logger)
-
-	// Configure device
 	if err := dev.IpcSet(uapiConfig); err != nil {
-		log.Panicf("Failed to configure agent device: %v", err)
+		dev.Close()
+		return fmt.Errorf("failed to configure device: %v", err)
 	}
 
-	// Bring up
 	if err := dev.Up(); err != nil {
-		log.Panicf("Failed to bring up agent device: %v", err)
+		dev.Close()
+		return fmt.Errorf("failed to bring up device: %v", err)
 	}
 
-	// listen to uapi (user api) for configuration
-	// Note: We use a local socket file to avoid permission issues with /var/run/wireguard
-	// This allows the agent to be configured via UAPI if needed, but requires pointing tools to this socket.
-	socketPath := "wg0.sock"
-	os.Remove(socketPath) // clean up old socket
+	log.Printf("VPN Tunnel Established. IP: %s", vpnConfig.AssignedIP)
 
-	uapiListener, err := net.Listen("unix", socketPath)
-	if err != nil {
-		log.Printf("Failed to create UAPI listener on %s: %v", socketPath, err)
-	} else {
-		logger.Verbosef("UAPI listener started on %s", socketPath)
-		// accept connections
-		go func() {
-			for {
-				conn, err := uapiListener.Accept()
-				if err != nil {
-					logger.Errorf("uapi accept failed: %v", err)
-					continue
+	// Heartbeat Loop
+	heartbeatTicker := time.NewTicker(5 * time.Second)
+	defer heartbeatTicker.Stop()
+
+	// Error channel to prompt reconnection if heartbeat fails continuously
+	errChan := make(chan error, 1)
+
+	go func() {
+		failedCount := 0
+		for range heartbeatTicker.C {
+			if err := sendHeartbeat(serverURL, apiKey); err != nil {
+				log.Printf("Heartbeat failed: %v", err)
+				failedCount++
+				if failedCount > 5 {
+					errChan <- fmt.Errorf("too many heartbeat failures")
+					return
 				}
-				go dev.IpcHandle(conn)
+			} else {
+				failedCount = 0
 			}
-		}()
+		}
+	}()
+
+	select {
+	case <-sigChan:
+		dev.Close()
+		return nil // User requested exit, handled in main
+	case err := <-errChan:
+		dev.Close()
+		return err
+	}
+}
+
+func sendHeartbeat(serverURL, apiKey string) error {
+	var m runtime.MemStats
+	runtime.ReadMemStats(&m)
+
+	payload := map[string]interface{}{
+		"api_key":              apiKey,
+		"heartbeat_latency_ms": 10, // Simulated for now
+		"bytes_sent":           0,  // TODO: Get from device stats if possible
+		"bytes_received":       0,
+		"active_connections":   0,
+		"cpu_usage":            0.0,
+		"memory_usage":         float64(m.Alloc) / 1024 / 1024, // MB
 	}
 
-	logger.Verbosef("Device started")
+	jsonBody, _ := json.Marshal(payload)
+	client := &http.Client{Timeout: 3 * time.Second}
+	resp, err := client.Post(serverURL+"/api/v1/agents/heartbeat", "application/json", bytes.NewBuffer(jsonBody))
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
 
-	// Connect to control server (Handled at startup now)
-	/*
-		go func() {
-			// simple retry loop or just one attempt for now
-			if err := connectToServer("http://127.0.0.1:3000"); err != nil {
-				logger.Errorf("Failed to connect to server: %v", err)
-			} else {
-				logger.Verbosef("Connected to control server")
-			}
-		}()
-	*/ // Removed old connect loop logic as we connect BEFORE starting device now
-
-	// Wait for interrupt signal to cleanup
-	c := make(chan os.Signal, 1)
-	signal.Notify(c, os.Interrupt, syscall.SIGTERM)
-	<-c
-
-	logger.Verbosef("Shutting down")
-	dev.Close()
+	if resp.StatusCode != 200 {
+		return fmt.Errorf("status %d", resp.StatusCode)
+	}
+	return nil
 }
 
 type VPNConfig struct {
@@ -204,7 +221,11 @@ func connectToServer(baseURL, apiKey, pubKey string) (*VPNConfig, error) {
 		return nil, fmt.Errorf("failed to marshal request: %v", err)
 	}
 
-	resp, err := http.Post(baseURL+"/api/v1/agent/connect", "application/json", bytes.NewBuffer(jsonBody))
+	client := &http.Client{
+		Timeout: 5 * time.Second,
+	}
+
+	resp, err := client.Post(baseURL+"/api/v1/agent/connect", "application/json", bytes.NewBuffer(jsonBody))
 	if err != nil {
 		return nil, err
 	}
@@ -247,6 +268,8 @@ func generateKeyPair() (string, string) {
 func hexKey(b64 string) string {
 	k, err := base64.StdEncoding.DecodeString(b64)
 	if err != nil {
+		// Log but don't panic, return empty or handle gracefully?
+		// Actually panic is fine for now as it's critical config
 		log.Panicf("Invalid key %s: %v", b64, err)
 	}
 	return hex.EncodeToString(k)
