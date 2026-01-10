@@ -51,8 +51,8 @@ importers:
         specifier: ^0.562.0
         version: 0.562.0(react@19.2.3)
       motion:
-        specifier: ^12.24.10
-        version: 12.24.10(react-dom@19.2.3(react@19.2.3))(react@19.2.3)
+        specifier: ^12.25.0
+        version: 12.25.0(react-dom@19.2.3(react@19.2.3))(react@19.2.3)
       next:
         specifier: 16.1.1
         version: 16.1.1(@babel/core@7.28.5)(react-dom@19.2.3(react@19.2.3))(react@19.2.3)
@@ -73,31 +73,31 @@ importers:
         version: 3.4.0
     devDependencies:
       '@tailwindcss/postcss':
-        specifier: ^4
+        specifier: ^4.1.18
         version: 4.1.18
       '@types/node':
-        specifier: ^20
-        version: 20.19.27
+        specifier: ^25.0.5
+        version: 25.0.5
       '@types/react':
-        specifier: ^19
+        specifier: ^19.2.7
         version: 19.2.7
       '@types/react-dom':
-        specifier: ^19
+        specifier: ^19.2.3
         version: 19.2.3(@types/react@19.2.7)
       eslint:
-        specifier: ^9
+        specifier: ^9.39.2
         version: 9.39.2(jiti@2.6.1)
       eslint-config-next:
         specifier: 16.1.1
         version: 16.1.1(@typescript-eslint/parser@8.52.0(eslint@9.39.2(jiti@2.6.1))(typescript@5.9.3))(eslint@9.39.2(jiti@2.6.1))(typescript@5.9.3)
       tailwindcss:
-        specifier: ^4
+        specifier: ^4.1.18
         version: 4.1.18
       tw-animate-css:
         specifier: ^1.4.0
         version: 1.4.0
       typescript:
-        specifier: ^5
+        specifier: ^5.9.3
         version: 5.9.3
 
 packages:
@@ -1029,8 +1029,8 @@ packages:
   '@types/json5@0.0.29':
     resolution: {integrity: sha512-dRLjCWHYg4oaA77cxO64oO+7JwCwnIzkZPdrrC71jQmQtlhM556pwKo5bUzqvZndkVbeFLIIi+9TC40JNF5hNQ==}
 
-  '@types/node@20.19.27':
-    resolution: {integrity: sha512-N2clP5pJhB2YnZJ3PIHFk5RkygRX5WO/5f0WC08tp0wd+sv0rsJk3MqWn3CbNmT2J505a5336jaQj4ph1AdMug==}
+  '@types/node@25.0.5':
+    resolution: {integrity: sha512-FuLxeLuSVOqHPxSN1fkcD8DLU21gAP7nCKqGRJ/FglbCUBs0NYN6TpHcdmyLeh8C0KwGIaZQJSv+OYG+KZz+Gw==}
 
   '@types/react-dom@19.2.3':
     resolution: {integrity: sha512-jp2L/eY6fn+KgVVQAOqYItbF0VY/YApe5Mz2F0aykSO8gx31bYCZyvSeYxCHKvzHG5eZjc+zyaS5BrBWya2+kQ==}
@@ -1276,8 +1276,8 @@ packages:
   balanced-match@1.0.2:
     resolution: {integrity: sha512-3oSeUO0TMV67hN1AmbXsK4yaqU7tjiHlbxRDZOpH0KW9+CeX4bRAaX0Anxt0tx2MrpRpWwQaPwIlISEJhYU5Pw==}
 
-  baseline-browser-mapping@2.9.11:
-    resolution: {integrity: sha512-Sg0xJUNDU1sJNGdfGWhVHX0kkZ+HWcvmVymJbj6NSgZZmW/8S9Y2HQ5euytnIgakgxN6papOAWiwDo1ctFDcoQ==}
+  baseline-browser-mapping@2.9.14:
+    resolution: {integrity: sha512-B0xUquLkiGLgHhpPBqvl7GWegWBUNuujQ6kXd/r1U38ElPT6Ok8KZ8e+FpUGEc2ZoRQUzq/aUnaKFc/svWUGSg==}
     hasBin: true
 
   brace-expansion@1.1.12:
@@ -1311,8 +1311,8 @@ packages:
     resolution: {integrity: sha512-P8BjAsXvZS+VIDUI11hHCQEv74YT67YUi5JJFNWIqL235sBmjX4+qx9Muvls5ivyNENctx46xQLQ3aTuE7ssaQ==}
     engines: {node: '>=6'}
 
-  caniuse-lite@1.0.30001762:
-    resolution: {integrity: sha512-PxZwGNvH7Ak8WX5iXzoK1KPZttBXNPuaOvI2ZYU7NrlM+d9Ov+TUvlLOBNGzVXAntMSMMlJPd+jY6ovrVjSmUw==}
+  caniuse-lite@1.0.30001763:
+    resolution: {integrity: sha512-mh/dGtq56uN98LlNX9qdbKnzINhX0QzhiWBFEkFfsFO4QyCvL8YegrJAazCwXIeqkIob8BlZPGM3xdnY+sgmvQ==}
 
   chalk@4.1.2:
     resolution: {integrity: sha512-oKnbhFyRIXpUuez8iBMmyEa4nbj4IOQyuhc/wy9kY7/WVPcwIO9VA668Pu8RkO7+0G76SLROeyw9CpQ061i4mA==}
@@ -1620,8 +1620,8 @@ packages:
     resolution: {integrity: sha512-dKx12eRCVIzqCxFGplyFKJMPvLEWgmNtUrpTiJIR5u97zEhRG8ySrtboPHZXx7daLxQVrl643cTzbab2tkQjxg==}
     engines: {node: '>= 0.4'}
 
-  framer-motion@12.24.10:
-    resolution: {integrity: sha512-8yoyMkCn2RmV9UB9mfmMuzKyenQe909hRQRl0yGBhbZJjZZ9bSU87NIGAruqCXCuTNCA0qHw2LWLrcXLL9GF6A==}
+  framer-motion@12.25.0:
+    resolution: {integrity: sha512-mlWqd0rApIjeyhTCSNCqPYsUAEhkcUukZxH3ke6KbstBRPcxhEpuIjmiUQvB+1E9xkEm5SpNHBgHCapH/QHTWg==}
     peerDependencies:
       '@emotion/is-prop-valid': '*'
       react: ^18.0.0 || ^19.0.0
@@ -2030,14 +2030,14 @@ packages:
   minimist@1.2.8:
     resolution: {integrity: sha512-2yyAR8qBkN3YuheJanUpWC5U3bb5osDywNB8RzDVlDwDHbocAJveqqj1u8+SVD7jkWT4yvsHCpWqqWqAxb0zCA==}
 
-  motion-dom@12.24.10:
-    resolution: {integrity: sha512-H3HStYaJ6wANoZVNT0ZmYZHGvrpvi9pKJRzsgNEHkdITR4Qd9FFu2e9sH4e2Phr4tKCmyyloex6SOSmv0Tlq+g==}
+  motion-dom@12.24.11:
+    resolution: {integrity: sha512-DlWOmsXMJrV8lzZyd+LKjG2CXULUs++bkq8GZ2Sr0R0RRhs30K2wtY+LKiTjhmJU3W61HK+rB0GLz6XmPvTA1A==}
 
   motion-utils@12.24.10:
     resolution: {integrity: sha512-x5TFgkCIP4pPsRLpKoI86jv/q8t8FQOiM/0E8QKBzfMozWHfkKap2gA1hOki+B5g3IsBNpxbUnfOum1+dgvYww==}
 
-  motion@12.24.10:
-    resolution: {integrity: sha512-P3tEZfL9N9Feb2sXVZaF085DHNyd4SO/X76Fo37pFv6DDAeL3vU4vYpTZBWiwW66qnF11VmFCM9DxnpAG825yg==}
+  motion@12.25.0:
+    resolution: {integrity: sha512-jBFohEYklpZ+TL64zv03sHdqr1Tsc8/yDy7u68hVzi7hTJYtv53AduchqCiY3aWi4vY1hweS8DWtgCuckusYdQ==}
     peerDependencies:
       '@emotion/is-prop-valid': '*'
       react: ^18.0.0 || ^19.0.0
@@ -2471,8 +2471,8 @@ packages:
     resolution: {integrity: sha512-nWJ91DjeOkej/TA8pXQ3myruKpKEYgqvpw9lz4OPHj/NWFNluYrjbz9j01CJ8yKQd2g4jFoOkINCTW2I5LEEyw==}
     engines: {node: '>= 0.4'}
 
-  undici-types@6.21.0:
-    resolution: {integrity: sha512-iwDZqg0QAGrg9Rav5H4n0M64c3mkR59cJ6wQp+7C4nI0gsmExaedaYLNO44eT4AtBBwjbTiGPMlt2Md0T9H9JQ==}
+  undici-types@7.16.0:
+    resolution: {integrity: sha512-Zz+aZWSj8LE6zoxD+xrjh4VfkIG8Ya6LvYkZqtUQGJPZjYl53ypCaUwWqo7eI0x66KBGeRo+mlBEkMSeSZ38Nw==}
 
   unrs-resolver@1.11.1:
     resolution: {integrity: sha512-bSjt9pjaEBnNiGgc9rUiHGKv5l4/TGzDmYw3RhnkJGtLhbnnA/5qJj7x3dNDCRx/PJxu774LlH8lCOlB4hEfKg==}
@@ -3423,9 +3423,9 @@ snapshots:
 
   '@types/json5@0.0.29': {}
 
-  '@types/node@20.19.27':
+  '@types/node@25.0.5':
     dependencies:
-      undici-types: 6.21.0
+      undici-types: 7.16.0
 
   '@types/react-dom@19.2.3(@types/react@19.2.7)':
     dependencies:
@@ -3691,7 +3691,7 @@ snapshots:
 
   balanced-match@1.0.2: {}
 
-  baseline-browser-mapping@2.9.11: {}
+  baseline-browser-mapping@2.9.14: {}
 
   brace-expansion@1.1.12:
     dependencies:
@@ -3708,8 +3708,8 @@ snapshots:
 
   browserslist@4.28.1:
     dependencies:
-      baseline-browser-mapping: 2.9.11
-      caniuse-lite: 1.0.30001762
+      baseline-browser-mapping: 2.9.14
+      caniuse-lite: 1.0.30001763
       electron-to-chromium: 1.5.267
       node-releases: 2.0.27
       update-browserslist-db: 1.2.3(browserslist@4.28.1)
@@ -3733,7 +3733,7 @@ snapshots:
 
   callsites@3.1.0: {}
 
-  caniuse-lite@1.0.30001762: {}
+  caniuse-lite@1.0.30001763: {}
 
   chalk@4.1.2:
     dependencies:
@@ -4185,9 +4185,9 @@ snapshots:
     dependencies:
       is-callable: 1.2.7
 
-  framer-motion@12.24.10(react-dom@19.2.3(react@19.2.3))(react@19.2.3):
+  framer-motion@12.25.0(react-dom@19.2.3(react@19.2.3))(react@19.2.3):
     dependencies:
-      motion-dom: 12.24.10
+      motion-dom: 12.24.11
       motion-utils: 12.24.10
       tslib: 2.8.1
     optionalDependencies:
@@ -4566,15 +4566,15 @@ snapshots:
 
   minimist@1.2.8: {}
 
-  motion-dom@12.24.10:
+  motion-dom@12.24.11:
     dependencies:
       motion-utils: 12.24.10
 
   motion-utils@12.24.10: {}
 
-  motion@12.24.10(react-dom@19.2.3(react@19.2.3))(react@19.2.3):
+  motion@12.25.0(react-dom@19.2.3(react@19.2.3))(react@19.2.3):
     dependencies:
-      framer-motion: 12.24.10(react-dom@19.2.3(react@19.2.3))(react@19.2.3)
+      framer-motion: 12.25.0(react-dom@19.2.3(react@19.2.3))(react@19.2.3)
       tslib: 2.8.1
     optionalDependencies:
       react: 19.2.3
@@ -4597,8 +4597,8 @@ snapshots:
     dependencies:
       '@next/env': 16.1.1
       '@swc/helpers': 0.5.15
-      baseline-browser-mapping: 2.9.11
-      caniuse-lite: 1.0.30001762
+      baseline-browser-mapping: 2.9.14
+      caniuse-lite: 1.0.30001763
       postcss: 8.4.31
       react: 19.2.3
       react-dom: 19.2.3(react@19.2.3)
@@ -5085,7 +5085,7 @@ snapshots:
       has-symbols: 1.1.0
       which-boxed-primitive: 1.1.1
 
-  undici-types@6.21.0: {}
+  undici-types@7.16.0: {}
 
   unrs-resolver@1.11.1:
     dependencies:
