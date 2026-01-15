@@ -175,27 +175,34 @@ persistent_keepalive_interval=25
 	}
 }
 
+var lastHeartbeatLatency int64
+
 func sendHeartbeat(serverURL, apiKey string) error {
 	var m runtime.MemStats
 	runtime.ReadMemStats(&m)
 
 	payload := map[string]interface{}{
 		"api_key":              apiKey,
-		"heartbeat_latency_ms": 10, // Simulated for now
-		"bytes_sent":           0,  // TODO: Get from device stats if possible
+		"heartbeat_latency_ms": lastHeartbeatLatency,
+		"bytes_sent":           0, // TODO: Get from device stats if possible
 		"bytes_received":       0,
 		"active_connections":   0,
-		"cpu_usage":            0.0,
-		"memory_usage":         float64(m.Alloc) / 1024 / 1024, // MB
+		"cpu_usage":            float64(runtime.NumGoroutine()), // Proxy for load
+		"memory_usage":         float64(m.Alloc) / 1024 / 1024,  // MB
 	}
 
 	jsonBody, _ := json.Marshal(payload)
 	client := &http.Client{Timeout: 3 * time.Second}
+
+	start := time.Now()
 	resp, err := client.Post(serverURL+"/api/v1/agents/heartbeat", "application/json", bytes.NewBuffer(jsonBody))
 	if err != nil {
 		return err
 	}
 	defer resp.Body.Close()
+
+	// Update latency for next heartbeat
+	lastHeartbeatLatency = time.Since(start).Milliseconds()
 
 	if resp.StatusCode != 200 {
 		return fmt.Errorf("status %d", resp.StatusCode)

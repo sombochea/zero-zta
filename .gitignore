@@ -2,3 +2,4 @@ bin/
 wg0.sock
 server.log
 *.db
+.DS_Store

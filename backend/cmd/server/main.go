@@ -56,6 +56,9 @@ func main() {
 	// Start Wireguard Server
 	go startWireguardServer()
 
+	// Start Agent Monitor
+	go service.StartAgentMonitor()
+
 	// =====================
 	// Agent CRUD Routes
 	// =====================
