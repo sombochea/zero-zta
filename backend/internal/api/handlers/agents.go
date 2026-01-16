@@ -152,14 +152,27 @@ func DeleteAgent(c fiber.Ctx) error {
 
 // UpdateAgentStatus updates agent online status (called by heartbeat)
 func UpdateAgentStatus(c fiber.Ctx) error {
+	type PostureData struct {
+		OSName            string `json:"os_name"`
+		OSVersion         string `json:"os_version"`
+		Hostname          string `json:"hostname"`
+		AntivirusEnabled  bool   `json:"antivirus_enabled"`
+		AntivirusName     string `json:"antivirus_name"`
+		FirewallEnabled   bool   `json:"firewall_enabled"`
+		DiskEncrypted     bool   `json:"disk_encrypted"`
+		ScreenLockEnabled bool   `json:"screen_lock_enabled"`
+		PostureScore      int    `json:"posture_score"`
+	}
+
 	type StatusRequest struct {
-		APIKey            string  `json:"api_key"`
-		HeartbeatLatency  int     `json:"heartbeat_latency_ms"`
-		BytesSent         int64   `json:"bytes_sent"`
-		BytesReceived     int64   `json:"bytes_received"`
-		ActiveConnections int     `json:"active_connections"`
-		CPUUsage          float64 `json:"cpu_usage"`
-		MemoryUsage       float64 `json:"memory_usage"`
+		APIKey            string       `json:"api_key"`
+		HeartbeatLatency  int          `json:"heartbeat_latency_ms"`
+		BytesSent         int64        `json:"bytes_sent"`
+		BytesReceived     int64        `json:"bytes_received"`
+		ActiveConnections int          `json:"active_connections"`
+		CPUUsage          float64      `json:"cpu_usage"`
+		MemoryUsage       float64      `json:"memory_usage"`
+		Posture           *PostureData `json:"posture,omitempty"`
 	}
 
 	var req StatusRequest
@@ -192,6 +205,26 @@ func UpdateAgentStatus(c fiber.Ctx) error {
 		MemoryUsage:       req.MemoryUsage,
 	}
 	db.DB.Create(&metrics)
+
+	// Store device posture if provided (Zero Trust)
+	if req.Posture != nil {
+		posture := models.DevicePosture{
+			AgentID:           agent.ID,
+			OSName:            req.Posture.OSName,
+			OSVersion:         req.Posture.OSVersion,
+			Hostname:          req.Posture.Hostname,
+			AntivirusEnabled:  req.Posture.AntivirusEnabled,
+			AntivirusName:     req.Posture.AntivirusName,
+			FirewallEnabled:   req.Posture.FirewallEnabled,
+			DiskEncrypted:     req.Posture.DiskEncrypted,
+			ScreenLockEnabled: req.Posture.ScreenLockEnabled,
+			PostureScore:      req.Posture.PostureScore,
+			LastChecked:       &now,
+		}
+
+		// Upsert posture (update if exists, create if not)
+		db.DB.Where("agent_id = ?", agent.ID).Assign(posture).FirstOrCreate(&posture)
+	}
 
 	return c.JSON(fiber.Map{"status": "ok"})
 }

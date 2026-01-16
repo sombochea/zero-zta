@@ -92,6 +92,28 @@ export interface Policy {
   allowed_ports: string;
   action: string;
   enabled: boolean;
+  // Zero Trust fields
+  valid_from?: string;
+  valid_until?: string;
+  allowed_regions?: string;
+  min_posture_score?: number;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface DevicePosture {
+  id: number;
+  agent_id: number;
+  os_name: string;
+  os_version: string;
+  hostname: string;
+  antivirus_enabled: boolean;
+  antivirus_name?: string;
+  firewall_enabled: boolean;
+  disk_encrypted: boolean;
+  screen_lock_enabled: boolean;
+  posture_score: number;
+  last_checked?: string;
   created_at: string;
   updated_at: string;
 }

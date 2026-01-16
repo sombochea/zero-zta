@@ -116,4 +116,46 @@ type Policy struct {
 	AllowedPorts  string `gorm:"size:512" json:"allowed_ports"`
 	Action        string `gorm:"size:32;default:'allow'" json:"action"`
 	Enabled       bool   `gorm:"default:true" json:"enabled"`
+
+	// Zero Trust: Time-based access control
+	ValidFrom  *time.Time `json:"valid_from,omitempty"`
+	ValidUntil *time.Time `json:"valid_until,omitempty"`
+
+	// Zero Trust: Geo-restriction (comma-separated country codes)
+	AllowedRegions string `gorm:"size:256" json:"allowed_regions,omitempty"`
+
+	// Zero Trust: Require minimum posture score
+	MinPostureScore int `gorm:"default:0" json:"min_posture_score"`
+}
+
+// DevicePosture stores security posture information for an agent
+type DevicePosture struct {
+	ID        uint      `gorm:"primarykey" json:"id"`
+	CreatedAt time.Time `json:"created_at"`
+	UpdatedAt time.Time `json:"updated_at"`
+
+	AgentID uint   `gorm:"uniqueIndex" json:"agent_id"`
+	Agent   *Agent `gorm:"foreignKey:AgentID" json:"-"`
+
+	// Operating System Info
+	OSName    string `gorm:"size:64" json:"os_name"`
+	OSVersion string `gorm:"size:64" json:"os_version"`
+	Hostname  string `gorm:"size:128" json:"hostname"`
+
+	// Security Status
+	AntivirusEnabled  bool   `json:"antivirus_enabled"`
+	AntivirusName     string `gorm:"size:128" json:"antivirus_name,omitempty"`
+	FirewallEnabled   bool   `json:"firewall_enabled"`
+	DiskEncrypted     bool   `json:"disk_encrypted"`
+	ScreenLockEnabled bool   `json:"screen_lock_enabled"`
+
+	// Patch Status
+	LastPatchDate  *time.Time `json:"last_patch_date,omitempty"`
+	PendingPatches int        `json:"pending_patches"`
+
+	// Computed posture score (0-100)
+	PostureScore int `json:"posture_score"`
+
+	// Last check timestamp
+	LastChecked *time.Time `json:"last_checked,omitempty"`
 }

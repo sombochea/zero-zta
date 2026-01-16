@@ -4,6 +4,7 @@ go 1.25.5
 
 require (
 	github.com/gofiber/fiber/v3 v3.0.0-rc.3
+	github.com/gorilla/websocket v1.5.3
 	golang.org/x/crypto v0.46.0
 	golang.zx2c4.com/wireguard v0.0.0-20250521234502-f333402bd9cb
 	gorm.io/driver/sqlite v1.6.0

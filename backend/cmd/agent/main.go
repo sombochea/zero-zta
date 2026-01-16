@@ -12,6 +12,7 @@ import (
 	"net"
 	"net/http"
 	"net/netip"
+	"net/url"
 	"os"
 	"os/signal"
 	"runtime"
@@ -28,6 +29,9 @@ import (
 func main() {
 	apiKey := flag.String("key", "", "API Key for authentication")
 	serverURL := flag.String("server", "http://127.0.0.1:3000", "Control Server URL")
+	tunnelMode := flag.String("tunnel", "", "Tunnel mode: 'ws' for WebSocket (firewall bypass)")
+	tunnelURL := flag.String("tunnel-url", "", "WebSocket tunnel URL (default: derives from server URL but uses port 443)")
+	insecureFlag := flag.Bool("insecure", false, "Skip TLS verification (dev only)")
 	flag.Parse()
 
 	if *apiKey == "" {
@@ -48,7 +52,7 @@ func main() {
 	// Main Agent Loop
 	for {
 		log.Printf("Connecting to %s...", *serverURL)
-		err := runAgent(*serverURL, *apiKey, privKey, pubKey, interfaceName, c)
+		err := runAgent(*serverURL, *tunnelURL, *apiKey, privKey, pubKey, interfaceName, *tunnelMode, *insecureFlag, c)
 		if err != nil {
 			log.Printf("Agent disconnected or failed: %v", err)
 		}
@@ -64,7 +68,7 @@ func main() {
 	}
 }
 
-func runAgent(serverURL, apiKey, privKey, pubKey, interfaceName string, sigChan chan os.Signal) error {
+func runAgent(serverURL, tunnelURL, apiKey, privKey, pubKey, interfaceName, tunnelMode string, insecure bool, sigChan chan os.Signal) error {
 	// Connect to control server to get VPN config
 	vpnConfig, err := connectToServer(serverURL, apiKey, pubKey)
 	if err != nil {
@@ -118,6 +122,59 @@ func runAgent(serverURL, apiKey, privKey, pubKey, interfaceName string, sigChan 
 	// WireGuard Device
 	dev := device.NewDevice(tun, conn.NewDefaultBind(), logger)
 
+	// Determine WireGuard endpoint
+	wgEndpoint := vpnConfig.Endpoint
+
+	// If using WebSocket tunnel, start tunnel and override endpoint
+	var wsTunnel *WSTunnelClient
+	if tunnelMode == "ws" {
+		log.Println("WebSocket tunnel mode enabled - bypassing firewall...")
+
+		// Determine Tunnel URL
+		effectiveTunnelURL := tunnelURL
+		if effectiveTunnelURL == "" {
+			// Default to deriving from server URL but change port to 443 for localhost dev
+			// In a real env, we might expect identical hostname/port or explicit config
+			u, _ := url.Parse(serverURL)
+			if u.Port() == "3000" {
+				// Dev mode assumption: If API is 3000, Tunnel might be 443
+				effectiveTunnelURL = fmt.Sprintf("wss://%s:443/ws/tunnel", u.Hostname())
+			} else {
+				// Otherwise assume same host/port
+				scheme := "wss"
+				if u.Scheme == "http" {
+					scheme = "ws"
+				}
+				effectiveTunnelURL = fmt.Sprintf("%s://%s/ws/tunnel", scheme, u.Host)
+			}
+		}
+
+		// For WS tunnel, we connect via HTTPS (typically port 443)
+		// and route WireGuard through the WebSocket
+		wsTunnel = NewWSTunnelClient(effectiveTunnelURL, apiKey, insecure)
+		if err := wsTunnel.Connect(); err != nil {
+			return fmt.Errorf("WebSocket tunnel failed: %v", err)
+		}
+
+		// Start local UDP proxy for WireGuard to connect to
+		localAddr, err := wsTunnel.StartLocalUDPProxy(0) // Random port
+		if err != nil {
+			wsTunnel.Close()
+			return fmt.Errorf("failed to start local proxy: %v", err)
+		}
+
+		// Override WireGuard endpoint to use local proxy
+		wgEndpoint = localAddr.String()
+		log.Printf("WireGuard routed through WebSocket tunnel via %s", wgEndpoint)
+
+		// Start tunnel forwarding in background
+		go func() {
+			if err := wsTunnel.Run(); err != nil {
+				log.Printf("WebSocket tunnel error: %v", err)
+			}
+		}()
+	}
+
 	uapiConfig := fmt.Sprintf(`private_key=%s
 public_key=%s
 allowed_ip=%s
@@ -127,7 +184,7 @@ persistent_keepalive_interval=25
 		hexKey(privKey),
 		hexKey(vpnConfig.ServerPubKey),
 		vpnConfig.AllowedIPs,
-		vpnConfig.Endpoint,
+		wgEndpoint,
 	)
 
 	if err := dev.IpcSet(uapiConfig); err != nil {
@@ -181,6 +238,9 @@ func sendHeartbeat(serverURL, apiKey string) error {
 	var m runtime.MemStats
 	runtime.ReadMemStats(&m)
 
+	// Collect device posture for Zero Trust verification
+	posture := CollectDevicePosture()
+
 	payload := map[string]interface{}{
 		"api_key":              apiKey,
 		"heartbeat_latency_ms": lastHeartbeatLatency,
@@ -189,6 +249,18 @@ func sendHeartbeat(serverURL, apiKey string) error {
 		"active_connections":   0,
 		"cpu_usage":            float64(runtime.NumGoroutine()), // Proxy for load
 		"memory_usage":         float64(m.Alloc) / 1024 / 1024,  // MB
+		// Device posture data for Zero Trust
+		"posture": map[string]interface{}{
+			"os_name":             posture.OSName,
+			"os_version":          posture.OSVersion,
+			"hostname":            posture.Hostname,
+			"antivirus_enabled":   posture.AntivirusEnabled,
+			"antivirus_name":      posture.AntivirusName,
+			"firewall_enabled":    posture.FirewallEnabled,
+			"disk_encrypted":      posture.DiskEncrypted,
+			"screen_lock_enabled": posture.ScreenLockEnabled,
+			"posture_score":       posture.PostureScore,
+		},
 	}
 
 	jsonBody, _ := json.Marshal(payload)

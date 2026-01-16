@@ -23,10 +23,11 @@ import {
     SelectValue
 } from "@/components/ui/select";
 import { getPolicies, createPolicy, updatePolicy, deletePolicy, getGroups, getAgents, Policy, Group, Agent } from "@/lib/api";
-import { Plus, Trash2, ArrowRight, Edit, Shield, ShieldCheck, ShieldX, Users } from "lucide-react";
+import { Plus, Trash2, ArrowRight, Edit, Shield, ShieldCheck, ShieldX, Users, Clock, Globe, Lock, AlertTriangle } from "lucide-react";
 import { toast } from "sonner";
 import { DataTable } from "@/components/ui/data-table";
 import { ColumnDef } from "@tanstack/react-table";
+import { Slider } from "@/components/ui/slider";
 
 export default function PoliciesPage() {
     const [policies, setPolicies] = useState<Policy[]>([]);
@@ -48,6 +49,10 @@ export default function PoliciesPage() {
         allowed_ports: "*",
         action: "allow",
         enabled: true,
+        valid_from: "",
+        valid_until: "",
+        allowed_regions: "",
+        min_posture_score: 0
     });
 
     const fetchData = async () => {
@@ -80,6 +85,10 @@ export default function PoliciesPage() {
             allowed_ports: "*",
             action: "allow",
             enabled: true,
+            valid_from: "",
+            valid_until: "",
+            allowed_regions: "",
+            min_posture_score: 0
         });
     };
 
@@ -87,7 +96,13 @@ export default function PoliciesPage() {
         if (!formData.name.trim() || !formData.source_group_id || !formData.dest_group_id) return;
 
         try {
-            await createPolicy(formData);
+            await createPolicy({
+                ...formData,
+                valid_from: formData.valid_from ? new Date(formData.valid_from).toISOString() : undefined,
+                valid_until: formData.valid_until ? new Date(formData.valid_until).toISOString() : undefined,
+                allowed_regions: formData.allowed_regions || undefined,
+                min_posture_score: formData.min_posture_score > 0 ? formData.min_posture_score : undefined
+            });
             resetForm();
             setCreateDialogOpen(false);
             toast.success("Policy created successfully");
@@ -101,7 +116,13 @@ export default function PoliciesPage() {
         if (!selectedPolicy || !formData.name.trim()) return;
 
         try {
-            await updatePolicy(selectedPolicy.id, formData);
+            await updatePolicy(selectedPolicy.id, {
+                ...formData,
+                valid_from: formData.valid_from ? new Date(formData.valid_from).toISOString() : undefined,
+                valid_until: formData.valid_until ? new Date(formData.valid_until).toISOString() : undefined,
+                allowed_regions: formData.allowed_regions || undefined,
+                min_posture_score: formData.min_posture_score > 0 ? formData.min_posture_score : undefined
+            });
             resetForm();
             setSelectedPolicy(null);
             setEditDialogOpen(false);
@@ -134,6 +155,10 @@ export default function PoliciesPage() {
             allowed_ports: policy.allowed_ports,
             action: policy.action,
             enabled: policy.enabled,
+            valid_from: policy.valid_from ? new Date(policy.valid_from).toISOString().slice(0, 16) : "",
+            valid_until: policy.valid_until ? new Date(policy.valid_until).toISOString().slice(0, 16) : "",
+            allowed_regions: policy.allowed_regions || "",
+            min_posture_score: policy.min_posture_score || 0
         });
         setEditDialogOpen(true);
     };
@@ -151,85 +176,64 @@ export default function PoliciesPage() {
     const columns: ColumnDef<Policy>[] = [
         {
             accessorKey: "name",
-            header: "Name",
+            header: "Policy",
             cell: ({ row }) => (
-                <div>
-                    <p className="font-medium">{row.getValue("name")}</p>
-                    {row.original.description && (
-                        <p className="text-xs text-muted-foreground truncate max-w-[200px]">
-                            {row.original.description}
-                        </p>
+                <div className="flex flex-col">
+                    <span className="font-semibold flex items-center gap-2">
+                        {row.original.enabled ? (
+                            <div className="w-2 h-2 rounded-full bg-green-500" />
+                        ) : (
+                            <div className="w-2 h-2 rounded-full bg-muted" />
+                        )}
+                        {row.getValue("name")}
+                    </span>
+                    <span className="text-xs text-muted-foreground">{row.original.description}</span>
+                </div>
+            )
+        },
+        {
+            id: "path",
+            header: "Traffic Flow",
+            cell: ({ row }) => (
+                <div className="flex items-center gap-3 text-sm">
+                    <Badge variant="outline" className="bg-background">{row.original.source_group?.name || "Any"}</Badge>
+                    <ArrowRight className="h-3 w-3 text-muted-foreground" />
+                    <Badge variant="outline" className="bg-background">{row.original.dest_group?.name || "Any"}</Badge>
+                </div>
+            )
+        },
+        {
+            header: "Controls",
+            id: "controls",
+            cell: ({ row }) => (
+                <div className="flex items-center gap-2">
+                    {row.original.valid_from && <Clock className="h-3 w-3 text-blue-500" />}
+                    {row.original.allowed_regions && <Globe className="h-3 w-3 text-purple-500" />}
+                    {row.original.min_posture_score && row.original.min_posture_score > 0 && (
+                        <Badge variant="secondary" className="px-1 py-0 text-[10px] h-4">
+                            Score: {row.original.min_posture_score}+
+                        </Badge>
                     )}
                 </div>
             )
         },
         {
-            id: "rule",
-            header: "Rule",
-            cell: ({ row }) => (
-                <div className="flex items-center gap-2">
-                    <Badge variant="outline" className="font-normal">
-                        {row.original.source_group?.name || "Unknown"}
-                    </Badge>
-                    <ArrowRight className="h-4 w-4 text-muted-foreground" />
-                    <Badge variant="outline" className="font-normal">
-                        {row.original.dest_group?.name || "Unknown"}
-                    </Badge>
-                </div>
-            )
-        },
-        {
-            accessorKey: "allowed_ports",
-            header: "Ports",
-            cell: ({ row }) => (
-                <code className="text-xs bg-muted px-2 py-1 rounded">
-                    {row.getValue("allowed_ports")}
-                </code>
-            )
-        },
-        {
             accessorKey: "action",
             header: "Action",
-            cell: ({ row }) => {
-                const action = row.getValue("action") as string;
-                return (
-                    <Badge variant={action === "allow" ? "default" : "destructive"}>
-                        {action === "allow" ? (
-                            <ShieldCheck className="h-3 w-3 mr-1" />
-                        ) : (
-                            <ShieldX className="h-3 w-3 mr-1" />
-                        )}
-                        {action}
-                    </Badge>
-                );
-            }
-        },
-        {
-            accessorKey: "enabled",
-            header: "Status",
             cell: ({ row }) => (
-                <Switch
-                    checked={row.original.enabled}
-                    onCheckedChange={() => togglePolicyEnabled(row.original)}
-                />
+                <Badge variant={row.original.action === "allow" ? "default" : "destructive"}>
+                    {row.original.action}
+                </Badge>
             )
         },
         {
             id: "actions",
             cell: ({ row }) => (
                 <div className="flex justify-end gap-2">
-                    <Button
-                        variant="ghost"
-                        size="icon"
-                        onClick={() => openEditDialog(row.original)}
-                    >
+                    <Button variant="ghost" size="icon" onClick={() => openEditDialog(row.original)}>
                         <Edit className="h-4 w-4" />
                     </Button>
-                    <Button
-                        variant="ghost"
-                        size="icon"
-                        onClick={() => handleDelete(row.original.id)}
-                    >
+                    <Button variant="ghost" size="icon" onClick={() => handleDelete(row.original.id)}>
                         <Trash2 className="h-4 w-4 text-destructive" />
                     </Button>
                 </div>
@@ -238,237 +242,157 @@ export default function PoliciesPage() {
     ];
 
     if (loading) {
-        return (
-            <div className="flex items-center justify-center h-64">
-                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
-            </div>
-        );
+        return <div className="p-8 text-center">Loading policies...</div>;
     }
 
     const PolicyFormContent = () => (
-        <div className="space-y-4 py-4">
-            <div className="space-y-2">
-                <Label>Policy Name</Label>
-                <Input
-                    placeholder="e.g., Allow Web to Database"
-                    value={formData.name}
-                    onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                />
-            </div>
-            <div className="space-y-2">
-                <Label>Description</Label>
-                <Input
-                    placeholder="Optional description"
-                    value={formData.description}
-                    onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-                />
-            </div>
+        <div className="space-y-6 py-4">
             <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
-                    <Label>Source Group</Label>
-                    <Select
-                        value={String(formData.source_group_id)}
-                        onValueChange={(v) => setFormData({ ...formData, source_group_id: parseInt(v) })}
-                    >
-                        <SelectTrigger>
-                            <SelectValue placeholder="Select group" />
-                        </SelectTrigger>
-                        <SelectContent>
-                            {groups.map(g => (
-                                <SelectItem key={g.id} value={String(g.id)}>
-                                    <div className="flex items-center gap-2">
-                                        <Users className="h-4 w-4" />
-                                        {g.name}
-                                        <span className="text-xs text-muted-foreground">({g.agents?.length || 0})</span>
-                                    </div>
-                                </SelectItem>
-                            ))}
-                        </SelectContent>
-                    </Select>
-                </div>
-                <div className="space-y-2">
-                    <Label>Destination Group</Label>
-                    <Select
-                        value={String(formData.dest_group_id)}
-                        onValueChange={(v) => setFormData({ ...formData, dest_group_id: parseInt(v) })}
-                    >
-                        <SelectTrigger>
-                            <SelectValue placeholder="Select group" />
-                        </SelectTrigger>
-                        <SelectContent>
-                            {groups.map(g => (
-                                <SelectItem key={g.id} value={String(g.id)}>
-                                    <div className="flex items-center gap-2">
-                                        <Users className="h-4 w-4" />
-                                        {g.name}
-                                        <span className="text-xs text-muted-foreground">({g.agents?.length || 0})</span>
-                                    </div>
-                                </SelectItem>
-                            ))}
-                        </SelectContent>
-                    </Select>
-                </div>
-            </div>
-            <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-2">
-                    <Label>Allowed Ports</Label>
-                    <Input
-                        placeholder="e.g., 80,443,22 or * for all"
-                        value={formData.allowed_ports}
-                        onChange={(e) => setFormData({ ...formData, allowed_ports: e.target.value })}
-                    />
+                    <Label>Policy Name</Label>
+                    <Input value={formData.name} onChange={e => setFormData({ ...formData, name: e.target.value })} placeholder="e.g. Web to DB Access" />
                 </div>
                 <div className="space-y-2">
                     <Label>Action</Label>
-                    <Select
-                        value={formData.action}
-                        onValueChange={(v) => setFormData({ ...formData, action: v })}
-                    >
-                        <SelectTrigger>
-                            <SelectValue />
-                        </SelectTrigger>
+                    <Select value={formData.action} onValueChange={v => setFormData({ ...formData, action: v })}>
+                        <SelectTrigger><SelectValue /></SelectTrigger>
                         <SelectContent>
-                            <SelectItem value="allow">
-                                <div className="flex items-center gap-2">
-                                    <ShieldCheck className="h-4 w-4 text-green-500" />
-                                    Allow
-                                </div>
-                            </SelectItem>
-                            <SelectItem value="deny">
-                                <div className="flex items-center gap-2">
-                                    <ShieldX className="h-4 w-4 text-red-500" />
-                                    Deny
-                                </div>
-                            </SelectItem>
+                            <SelectItem value="allow"><span className="flex items-center gap-2"><ShieldCheck className="h-4 w-4 text-green-500" /> Allow</span></SelectItem>
+                            <SelectItem value="deny"><span className="flex items-center gap-2"><ShieldX className="h-4 w-4 text-red-500" /> Deny</span></SelectItem>
                         </SelectContent>
                     </Select>
                 </div>
             </div>
-            <div className="flex items-center justify-between rounded-lg border p-3 shadow-sm">
-                <div className="space-y-0.5">
-                    <Label>Enable Policy</Label>
-                    <p className="text-sm text-muted-foreground">
-                        Policy will be actively enforced
+
+            <div className="space-y-2">
+                <Label>Description</Label>
+                <Input value={formData.description} onChange={e => setFormData({ ...formData, description: e.target.value })} placeholder="Optional description" />
+            </div>
+
+            <div className="p-4 rounded-xl bg-muted/30 border border-border/50 space-y-4">
+                <h3 className="text-sm font-medium flex items-center gap-2 text-primary">
+                    <Shield className="h-4 w-4" /> Traffic Rules
+                </h3>
+                <div className="grid grid-cols-[1fr_auto_1fr] gap-4 items-center">
+                    <div className="space-y-2">
+                        <Label>Source Group</Label>
+                        <Select value={String(formData.source_group_id)} onValueChange={v => setFormData({ ...formData, source_group_id: parseInt(v) })}>
+                            <SelectTrigger><SelectValue placeholder="Select Group" /></SelectTrigger>
+                            <SelectContent>
+                                {groups.map(g => <SelectItem key={g.id} value={String(g.id)}>{g.name}</SelectItem>)}
+                            </SelectContent>
+                        </Select>
+                    </div>
+                    <ArrowRight className="h-4 w-4 text-muted-foreground mt-6" />
+                    <div className="space-y-2">
+                        <Label>Destination Group</Label>
+                        <Select value={String(formData.dest_group_id)} onValueChange={v => setFormData({ ...formData, dest_group_id: parseInt(v) })}>
+                            <SelectTrigger><SelectValue placeholder="Select Group" /></SelectTrigger>
+                            <SelectContent>
+                                {groups.map(g => <SelectItem key={g.id} value={String(g.id)}>{g.name}</SelectItem>)}
+                            </SelectContent>
+                        </Select>
+                    </div>
+                </div>
+                <div className="space-y-2">
+                    <Label>Allowed Ports (comma separated)</Label>
+                    <Input value={formData.allowed_ports} onChange={e => setFormData({ ...formData, allowed_ports: e.target.value })} placeholder="80, 443, 22 or *" className="font-mono" />
+                </div>
+            </div>
+
+            <div className="p-4 rounded-xl bg-blue-50/50 dark:bg-blue-950/20 border border-blue-200/50 dark:border-blue-800/50 space-y-4">
+                <h3 className="text-sm font-medium flex items-center gap-2 text-blue-600 dark:text-blue-400">
+                    <Lock className="h-4 w-4" /> Zero Trust Constraints
+                </h3>
+
+                <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                        <Label className="text-xs text-muted-foreground">Valid From</Label>
+                        <Input type="datetime-local" value={formData.valid_from} onChange={e => setFormData({ ...formData, valid_from: e.target.value })} />
+                    </div>
+                    <div className="space-y-2">
+                        <Label className="text-xs text-muted-foreground">Valid Until</Label>
+                        <Input type="datetime-local" value={formData.valid_until} onChange={e => setFormData({ ...formData, valid_until: e.target.value })} />
+                    </div>
+                </div>
+
+                <div className="space-y-2">
+                    <Label className="text-xs text-muted-foreground">Allowed Regions (Country Codes)</Label>
+                    <div className="flex gap-2">
+                        <Globe className="h-8 w-8 p-2 bg-background rounded border text-muted-foreground" />
+                        <Input value={formData.allowed_regions} onChange={e => setFormData({ ...formData, allowed_regions: e.target.value })} placeholder="US, UK, DE (Comma separated)" />
+                    </div>
+                </div>
+
+                <div className="space-y-4 pt-2">
+                    <div className="flex justify-between">
+                        <Label className="text-xs text-muted-foreground">Minimum Device Posture Score</Label>
+                        <span className="text-sm font-bold text-blue-600">{formData.min_posture_score}</span>
+                    </div>
+                    <Slider
+                        value={[formData.min_posture_score]}
+                        max={100}
+                        step={5}
+                        onValueChange={([val]) => setFormData({ ...formData, min_posture_score: val })}
+                        className="py-2"
+                    />
+                    <p className="text-[10px] text-muted-foreground">
+                        Devices with a score lower than {formData.min_posture_score} will be denied access even if authenticated.
                     </p>
                 </div>
-                <Switch
-                    checked={formData.enabled}
-                    onCheckedChange={(checked) => setFormData({ ...formData, enabled: checked })}
-                />
+            </div>
+
+            <div className="flex items-center justify-between pt-2">
+                <div className="space-y-0.5">
+                    <Label>Enable Policy</Label>
+                    <p className="text-xs text-muted-foreground">Active immediately upon save</p>
+                </div>
+                <Switch checked={formData.enabled} onCheckedChange={checked => setFormData({ ...formData, enabled: checked })} />
             </div>
         </div>
     );
 
     return (
-        <div className="space-y-8">
+        <div className="space-y-8 animate-in fade-in duration-500">
             <div className="flex items-center justify-between">
                 <div>
-                    <h1 className="text-3xl font-bold tracking-tight flex items-center gap-2">
-                        <Shield className="h-8 w-8" />
-                        Access Policies
-                    </h1>
-                    <p className="text-muted-foreground">
-                        Define access control rules between agent groups
-                    </p>
+                    <h1 className="text-3xl font-bold tracking-tight">Security Policies</h1>
+                    <p className="text-muted-foreground">Manage network access rules and Zero Trust constraints</p>
                 </div>
-                <Button onClick={() => { resetForm(); setCreateDialogOpen(true); }} disabled={groups.length < 1}>
-                    <Plus className="mr-2 h-4 w-4" />
-                    New Policy
+                <Button onClick={() => { resetForm(); setCreateDialogOpen(true); }}>
+                    <Plus className="mr-2 h-4 w-4" /> New Policy
                 </Button>
             </div>
 
-            {groups.length < 1 && (
-                <Card className="border-yellow-200 bg-yellow-50 dark:border-yellow-800 dark:bg-yellow-900/20">
-                    <CardContent className="pt-6">
-                        <p className="text-sm text-yellow-800 dark:text-yellow-200">
-                            You need at least 1 group to create policies. Create groups first.
-                        </p>
-                    </CardContent>
-                </Card>
-            )}
-
-            {/* Stats Cards */}
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                <Card>
-                    <CardHeader className="pb-2">
-                        <CardDescription>Total Policies</CardDescription>
-                        <CardTitle className="text-3xl">{policies.length}</CardTitle>
-                    </CardHeader>
-                </Card>
-                <Card>
-                    <CardHeader className="pb-2">
-                        <CardDescription>Active Policies</CardDescription>
-                        <CardTitle className="text-3xl text-green-600">
-                            {policies.filter(p => p.enabled).length}
-                        </CardTitle>
-                    </CardHeader>
-                </Card>
-                <Card>
-                    <CardHeader className="pb-2">
-                        <CardDescription>Disabled Policies</CardDescription>
-                        <CardTitle className="text-3xl text-muted-foreground">
-                            {policies.filter(p => !p.enabled).length}
-                        </CardTitle>
-                    </CardHeader>
-                </Card>
-            </div>
-
             <Card>
-                <CardHeader>
-                    <CardTitle>All Policies</CardTitle>
-                    <CardDescription>
-                        {policies.length} polic{policies.length !== 1 ? 'ies' : 'y'} defined
-                    </CardDescription>
-                </CardHeader>
-                <CardContent>
+                <CardContent className="p-0">
                     <DataTable columns={columns} data={policies} filterPlaceholder="Filter policies..." filterColumn="name" />
                 </CardContent>
             </Card>
 
-            {/* Create Dialog */}
             <Dialog open={createDialogOpen} onOpenChange={setCreateDialogOpen}>
-                <DialogContent className="max-w-lg">
+                <DialogContent className="max-w-2xl">
                     <DialogHeader>
                         <DialogTitle>Create New Policy</DialogTitle>
-                        <DialogDescription>
-                            Define which groups can communicate with each other.
-                        </DialogDescription>
+                        <DialogDescription>Define access rules and security constraints.</DialogDescription>
                     </DialogHeader>
                     <PolicyFormContent />
                     <DialogFooter>
-                        <Button variant="outline" onClick={() => setCreateDialogOpen(false)}>
-                            Cancel
-                        </Button>
-                        <Button
-                            onClick={handleCreate}
-                            disabled={!formData.name.trim() || !formData.source_group_id || !formData.dest_group_id}
-                        >
-                            Create Policy
-                        </Button>
+                        <Button variant="outline" onClick={() => setCreateDialogOpen(false)}>Cancel</Button>
+                        <Button onClick={handleCreate} disabled={!formData.name}>Create Rule</Button>
                     </DialogFooter>
                 </DialogContent>
             </Dialog>
 
-            {/* Edit Dialog */}
             <Dialog open={editDialogOpen} onOpenChange={setEditDialogOpen}>
-                <DialogContent className="max-w-lg">
+                <DialogContent className="max-w-2xl">
                     <DialogHeader>
                         <DialogTitle>Edit Policy</DialogTitle>
-                        <DialogDescription>
-                            Update the policy configuration.
-                        </DialogDescription>
                     </DialogHeader>
                     <PolicyFormContent />
                     <DialogFooter>
-                        <Button variant="outline" onClick={() => setEditDialogOpen(false)}>
-                            Cancel
-                        </Button>
-                        <Button
-                            onClick={handleUpdate}
-                            disabled={!formData.name.trim() || !formData.source_group_id || !formData.dest_group_id}
-                        >
-                            Save Changes
-                        </Button>
+                        <Button variant="outline" onClick={() => setEditDialogOpen(false)}>Cancel</Button>
+                        <Button onClick={handleUpdate}>Save Changes</Button>
                     </DialogFooter>
                 </DialogContent>
             </Dialog>

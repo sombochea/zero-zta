@@ -5,6 +5,7 @@ import (
 	"encoding/hex"
 	"fmt"
 	"log"
+	"net/http"
 	"net/netip"
 	"time"
 
@@ -12,8 +13,10 @@ import (
 	"github.com/cubetiq/zero-zta/backend/internal/db"
 	"github.com/cubetiq/zero-zta/backend/internal/models"
 	"github.com/cubetiq/zero-zta/backend/internal/service"
+	"github.com/cubetiq/zero-zta/backend/internal/tunnel"
 	"github.com/gofiber/fiber/v3"
 	"github.com/gofiber/fiber/v3/middleware/cors"
+	"github.com/gorilla/websocket"
 	"golang.zx2c4.com/wireguard/conn"
 	"golang.zx2c4.com/wireguard/device"
 	"golang.zx2c4.com/wireguard/tun/netstack"
@@ -32,7 +35,7 @@ func main() {
 	}
 
 	// Auto migrate models
-	if err := db.AutoMigrate(&models.Agent{}, &models.Group{}, &models.Policy{}, &models.Service{}, &models.AuditLog{}, &models.AccessLog{}, &models.AgentMetrics{}); err != nil {
+	if err := db.AutoMigrate(&models.Agent{}, &models.Group{}, &models.Policy{}, &models.Service{}, &models.AuditLog{}, &models.AccessLog{}, &models.AgentMetrics{}, &models.DevicePosture{}); err != nil {
 		log.Fatalf("Failed to migrate database: %v", err)
 	}
 
@@ -164,6 +167,67 @@ func main() {
 
 	// Debug Proxy Endpoint
 	v1.Get("/debug/proxy", handlers.ProxyToAgent)
+
+	// Initialize WebSocket Tunnel Server for firewall bypass
+	wsTunnelServer, err := tunnel.NewWSTunnelServer("127.0.0.1", 51820)
+	if err != nil {
+		log.Printf("Warning: Failed to initialize WebSocket tunnel: %v", err)
+	}
+
+	// WebSocket upgrader
+	upgrader := websocket.Upgrader{
+		CheckOrigin: func(r *http.Request) bool {
+			return true // Allow all origins for now
+		},
+	}
+
+	// Start HTTPS server with WebSocket tunnel endpoint
+	certFile, keyFile := GenerateSelfSignedCert()
+	go func() {
+		mux := http.NewServeMux()
+
+		// WebSocket tunnel endpoint
+		mux.HandleFunc("/ws/tunnel", func(w http.ResponseWriter, r *http.Request) {
+			// Get API key from query param or header
+			apiKey := r.URL.Query().Get("key")
+			if apiKey == "" {
+				apiKey = r.Header.Get("X-API-Key")
+			}
+			if apiKey == "" {
+				http.Error(w, "API key required", http.StatusUnauthorized)
+				return
+			}
+
+			// Validate agent
+			var agent models.Agent
+			if err := db.DB.Where("api_key = ?", apiKey).First(&agent).Error; err != nil {
+				http.Error(w, "Invalid API key", http.StatusUnauthorized)
+				return
+			}
+
+			// Upgrade to WebSocket
+			conn, err := upgrader.Upgrade(w, r, nil)
+			if err != nil {
+				log.Printf("WebSocket upgrade failed: %v", err)
+				return
+			}
+
+			// Handle tunnel connection
+			if wsTunnelServer != nil {
+				wsTunnelServer.HandleConnection(conn, agent.ID, agent.PublicKey)
+			}
+		})
+
+		// Health check for HTTPS
+		mux.HandleFunc("/health", func(w http.ResponseWriter, r *http.Request) {
+			w.Write([]byte("OK"))
+		})
+
+		log.Println("Starting HTTPS/WebSocket tunnel server on :443...")
+		if err := http.ListenAndServeTLS(":443", certFile, keyFile, mux); err != nil {
+			log.Printf("HTTPS server failed: %v (try running with sudo)", err)
+		}
+	}()
 
 	log.Fatal(app.Listen(":3000"))
 }
