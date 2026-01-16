@@ -25,6 +25,32 @@ type Agent struct {
 	// Enhanced fields
 	Routes   string    `gorm:"size:1024" json:"routes,omitempty"` // JSON array of local subnets
 	Services []Service `gorm:"foreignKey:AgentID" json:"services,omitempty"`
+	UserID   *uint     `json:"user_id,omitempty"`
+	User     *User     `gorm:"foreignKey:UserID" json:"user,omitempty"`
+}
+
+type User struct {
+	ID        uint           `gorm:"primarykey" json:"id"`
+	CreatedAt time.Time      `json:"created_at"`
+	UpdatedAt time.Time      `json:"updated_at"`
+	DeletedAt gorm.DeletedAt `gorm:"index" json:"-"`
+
+	Email    string  `gorm:"uniqueIndex;size:255" json:"email"`
+	Provider string  `gorm:"size:64" json:"provider"`            // google, github, local
+	Role     string  `gorm:"size:32;default:'user'" json:"role"` // admin, user
+	Agents   []Agent `gorm:"foreignKey:UserID" json:"agents,omitempty"`
+}
+
+type DeviceClaim struct {
+	ID        uint      `gorm:"primarykey" json:"id"`
+	CreatedAt time.Time `json:"created_at"`
+
+	Token     string `gorm:"uniqueIndex;size:64" json:"token"`
+	PublicKey string `gorm:"size:64" json:"public_key"`
+	Status    string `gorm:"size:32;default:'pending'" json:"status"` // pending, approved, rejected
+	IP        string `gorm:"size:64" json:"ip"`
+	Hostname  string `gorm:"size:64" json:"hostname"`
+	UserID    *uint  `json:"user_id,omitempty"`
 }
 
 type Service struct {

@@ -34,16 +34,23 @@ func main() {
 	insecureFlag := flag.Bool("insecure", false, "Skip TLS verification (dev only)")
 	flag.Parse()
 
-	if *apiKey == "" {
-		log.Fatal("API Key is required. Use --key <your_key>")
-	}
-
 	interfaceName := "wg0"
 	fmt.Printf("Starting Zero ZTA Agent on interface %s...\n", interfaceName)
 
 	// Generate Ephemeral Private Key (once per session, or rotate on reconnect? let's keep it for now)
 	privKey, pubKey := generateKeyPair()
 	log.Printf("Agent Public Key: %s", pubKey)
+
+	// Check if API Key is provided, if not, start interactive claiming flow
+	if *apiKey == "" {
+		fmt.Println("No API Key provided. Starting Device Claiming Workflow...")
+		key, err := performDeviceClaim(*serverURL, "", pubKey)
+		if err != nil {
+			log.Fatalf("Device claiming failed: %v", err)
+		}
+		*apiKey = key
+		fmt.Println("Got API Key! Connecting...")
+	}
 
 	// Wait for interrupt signal to cleanup
 	c := make(chan os.Signal, 1)

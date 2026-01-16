@@ -35,7 +35,7 @@ func main() {
 	}
 
 	// Auto migrate models
-	if err := db.AutoMigrate(&models.Agent{}, &models.Group{}, &models.Policy{}, &models.Service{}, &models.AuditLog{}, &models.AccessLog{}, &models.AgentMetrics{}, &models.DevicePosture{}); err != nil {
+	if err := db.AutoMigrate(&models.Agent{}, &models.Group{}, &models.Policy{}, &models.Service{}, &models.AuditLog{}, &models.AccessLog{}, &models.AgentMetrics{}, &models.DevicePosture{}, &models.User{}, &models.DeviceClaim{}); err != nil {
 		log.Fatalf("Failed to migrate database: %v", err)
 	}
 
@@ -61,6 +61,15 @@ func main() {
 
 	// Start Agent Monitor
 	go service.StartAgentMonitor()
+
+	// =====================
+	// Auth & Claim Routes
+	// =====================
+	v1.Post("/start-claim", handlers.StartClaim)
+	v1.Get("/claim-status", handlers.GetClaimStatus)
+	v1.Get("/claim-details", handlers.GetClaimDetails)
+	v1.Post("/approve-claim", handlers.ApproveClaim)
+	v1.Post("/auth/login", handlers.MockLogin)
 
 	// =====================
 	// Agent CRUD Routes

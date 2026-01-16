@@ -370,3 +370,44 @@ export async function deletePolicy(id: number): Promise<void> {
   const res = await fetch(`${API_BASE}/api/v1/policies/${id}`, { method: 'DELETE' });
   if (!res.ok) throw new Error('Failed to delete policy');
 }
+
+// Auth & Claiming
+export interface User {
+  id: number;
+  email: string;
+  role: string;
+}
+
+export interface ClaimDetails {
+  token: string;
+  hostname: string;
+  public_key: string;
+  ip: string;
+  status: string;
+  created_at: string;
+}
+
+export async function login(email: string): Promise<{ token: string, user: User }> {
+  const res = await fetch(`${API_BASE}/api/v1/auth/login`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ email }),
+  });
+  if (!res.ok) throw new Error("Login failed");
+  return res.json();
+}
+
+export async function getClaimDetails(token: string): Promise<ClaimDetails> {
+  const res = await fetch(`${API_BASE}/api/v1/claim-details?token=${token}`);
+  if (!res.ok) throw new Error("Failed to fetch claim details");
+  return res.json();
+}
+
+export async function approveClaim(token: string, email: string): Promise<void> {
+  const res = await fetch(`${API_BASE}/api/v1/approve-claim`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ token, email }),
+  });
+  if (!res.ok) throw new Error("Failed to approve claim");
+}
